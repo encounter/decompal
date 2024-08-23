@@ -183,7 +183,7 @@ func upsertComment(
 
 func createChanges(changes *objdiff.Changes) string {
 	out := "### Overall\n\n"
-	overallTable := changeInfoTable(changes.From, changes.To)
+	overallTable := measuresTable(changes.From, changes.To)
 	if overallTable == "" {
 		if len(changes.Units) == 0 {
 			return ""
@@ -194,7 +194,7 @@ func createChanges(changes *objdiff.Changes) string {
 	}
 	for _, unit := range changes.Units {
 		out += fmt.Sprintf("---\n### `%s`\n\n", unit.Name)
-		unitTable := changeInfoTable(unit.From, unit.To)
+		unitTable := measuresTable(unit.From, unit.To)
 		if unitTable != "" {
 			out += unitTable + "\n\n"
 		}
@@ -268,15 +268,15 @@ func changeItemInfoRow(item *objdiff.ChangeItem) string {
 	)
 }
 
-func changeInfoTable(prev, curr *objdiff.ChangeInfo) string {
+func measuresTable(prev, curr *objdiff.Measures) string {
 	if prev == nil && curr == nil {
 		return ""
 	} else if prev == nil {
 		// TODO: added
-		prev = &objdiff.ChangeInfo{}
+		prev = &objdiff.Measures{}
 	} else if curr == nil {
 		// TODO: removed
-		curr = &objdiff.ChangeInfo{}
+		curr = &objdiff.Measures{}
 	}
 	header := "|Metric|Previous|Current|Change|\n|-|-|-|-|"
 	rows := make([]string, 0)

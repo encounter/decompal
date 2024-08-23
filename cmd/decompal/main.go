@@ -22,51 +22,6 @@ func main() {
 	logger := baseapp.NewLogger(cfg.Logging)
 	zerolog.DefaultContextLogger = &logger
 
-	// Configure a temporary directory
-	//if cfg.App.TmpDir == "" {
-	//	cfg.App.TmpDir, err = os.MkdirTemp(os.TempDir(), "decompal")
-	//	if err != nil {
-	//		logger.Fatal().
-	//			Err(err).
-	//			Str("path", cfg.App.TmpDir).
-	//			Msg("failed to create temporary directory")
-	//	}
-	//}
-	//if _, err := os.Stat(cfg.App.TmpDir); err != nil {
-	//	if os.IsNotExist(err) {
-	//		err := os.MkdirAll(cfg.App.TmpDir, 0755)
-	//		if err != nil {
-	//			logger.Fatal().
-	//				Err(err).
-	//				Str("path", cfg.App.TmpDir).
-	//				Msg("failed to create temporary directory")
-	//		}
-	//	} else {
-	//		logger.Fatal().
-	//			Err(err).
-	//			Str("path", cfg.App.TmpDir).
-	//			Msg("failed to stat temporary directory")
-	//	}
-	//}
-	//logger.Debug().
-	//	Str("path", cfg.App.TmpDir).
-	//	Msg("Using temporary directory")
-	//// Delete the temporary directory on exit
-	//defer func() {
-	//	if err := os.RemoveAll(cfg.App.TmpDir); err != nil {
-	//		logger.Error().
-	//			Err(err).
-	//			Str("path", cfg.App.TmpDir).
-	//			Msg("failed to remove temporary directory")
-	//	}
-	//}()
-
-	// Create a task queue
-	//queueFactory := memqueue.NewFactory()
-	//taskQueue := queueFactory.RegisterQueue(&taskq.QueueOptions{
-	//	Name: "background-tasks",
-	//})
-
 	// Create the server
 	serverParams := baseapp.DefaultParams(logger, "decompal.")
 	server, err := baseapp.NewServer(cfg.Server, serverParams...)

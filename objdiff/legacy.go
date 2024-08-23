@@ -46,17 +46,19 @@ type legacyReportItem struct {
 
 func (r *legacyReport) convert() *Report {
 	report := &Report{
-		FuzzyMatchPercent:       r.FuzzyMatchPercent,
-		TotalCode:               r.TotalCode,
-		MatchedCode:             r.MatchedCode,
-		MatchedCodePercent:      r.MatchedCodePercent,
-		TotalData:               r.TotalData,
-		MatchedData:             r.MatchedData,
-		MatchedDataPercent:      r.MatchedDataPercent,
-		TotalFunctions:          r.TotalFunctions,
-		MatchedFunctions:        r.MatchedFunctions,
-		MatchedFunctionsPercent: r.MatchedFunctionsPercent,
-		Units:                   make([]*ReportUnit, 0, len(r.Units)),
+		Measures: &Measures{
+			FuzzyMatchPercent:       r.FuzzyMatchPercent,
+			TotalCode:               r.TotalCode,
+			MatchedCode:             r.MatchedCode,
+			MatchedCodePercent:      r.MatchedCodePercent,
+			TotalData:               r.TotalData,
+			MatchedData:             r.MatchedData,
+			MatchedDataPercent:      r.MatchedDataPercent,
+			TotalFunctions:          r.TotalFunctions,
+			MatchedFunctions:        r.MatchedFunctions,
+			MatchedFunctionsPercent: r.MatchedFunctionsPercent,
+		},
+		Units: make([]*ReportUnit, 0, len(r.Units)),
 	}
 	for _, unit := range r.Units {
 		report.Units = append(report.Units, unit.convert())
@@ -65,8 +67,7 @@ func (r *legacyReport) convert() *Report {
 }
 
 func (u *legacyReportUnit) convert() *ReportUnit {
-	unit := &ReportUnit{
-		Name:              u.Name,
+	measures := &Measures{
 		FuzzyMatchPercent: u.FuzzyMatchPercent,
 		TotalCode:         u.TotalCode,
 		MatchedCode:       u.MatchedCode,
@@ -74,11 +75,18 @@ func (u *legacyReportUnit) convert() *ReportUnit {
 		MatchedData:       u.MatchedData,
 		TotalFunctions:    u.TotalFunctions,
 		MatchedFunctions:  u.MatchedFunctions,
-		Complete:          u.Complete,
-		ModuleName:        u.ModuleName,
-		ModuleId:          u.ModuleID,
-		Sections:          make([]*ReportItem, 0, len(u.Sections)),
-		Functions:         make([]*ReportItem, 0, len(u.Functions)),
+	}
+	measures.CalcMatchedPercent()
+	unit := &ReportUnit{
+		Name:      u.Name,
+		Measures:  measures,
+		Sections:  make([]*ReportItem, 0, len(u.Sections)),
+		Functions: make([]*ReportItem, 0, len(u.Functions)),
+		Metadata: &ReportUnitMetadata{
+			Complete:   u.Complete,
+			ModuleName: u.ModuleName,
+			ModuleId:   u.ModuleID,
+		},
 	}
 	for _, section := range u.Sections {
 		unit.Sections = append(unit.Sections, section.convert())
@@ -90,20 +98,24 @@ func (u *legacyReportUnit) convert() *ReportUnit {
 }
 
 func (i *legacyReportItem) convert() *ReportItem {
-	var address uint64
+	var address *uint64
 	if i.Address != nil {
 		addressStr := *i.Address
 		if strings.HasPrefix(addressStr, "0x") {
-			address, _ = strconv.ParseUint(addressStr[2:], 16, 64)
+			v, _ := strconv.ParseUint(addressStr[2:], 16, 64)
+			address = &v
 		} else {
-			address, _ = strconv.ParseUint(addressStr, 10, 64)
+			v, _ := strconv.ParseUint(addressStr, 10, 64)
+			address = &v
 		}
 	}
 	return &ReportItem{
 		Name:              i.Name,
-		DemangledName:     i.DemangledName,
-		Address:           &address,
 		Size:              i.Size,
 		FuzzyMatchPercent: i.FuzzyMatchPercent,
+		Metadata: &ReportItemMetadata{
+			DemangledName:  i.DemangledName,
+			VirtualAddress: address,
+		},
 	}
 }

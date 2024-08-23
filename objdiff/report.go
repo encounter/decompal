@@ -22,7 +22,7 @@ type ReportFile struct {
 	Report  *Report
 }
 
-var artifactNameRegex = regexp.MustCompile(`^(?P<version>[A-z0-9_\-]+)_report$`)
+var artifactNameRegex = regexp.MustCompile(`^(?P<version>[A-z0-9_\-]+)[_-]report(?:[_-].*)?$`)
 
 func FetchReportFiles(
 	ctx context.Context,
@@ -150,4 +150,19 @@ func parseJson(data []byte, v *Report) error {
 		*v = *legacy.convert()
 	}
 	return nil
+}
+
+func (m *Measures) CalcMatchedPercent() {
+	m.MatchedCodePercent = 100
+	if m.TotalCode != 0 {
+		m.MatchedCodePercent = float32(m.MatchedCode) / float32(m.TotalCode) * 100
+	}
+	m.MatchedDataPercent = 100
+	if m.TotalData != 0 {
+		m.MatchedDataPercent = float32(m.MatchedData) / float32(m.TotalData) * 100
+	}
+	m.MatchedFunctionsPercent = 100
+	if m.TotalFunctions != 0 {
+		m.MatchedFunctionsPercent = float32(m.MatchedFunctions) / float32(m.TotalFunctions) * 100
+	}
 }
