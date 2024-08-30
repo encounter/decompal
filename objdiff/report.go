@@ -2,41 +2,38 @@ package objdiff
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/encounter/decompal/common"
+	"github.com/encounter/decompal/database"
 	"github.com/encounter/decompal/zipstream"
 	"github.com/google/go-github/v63/github"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"io"
 	"net/http"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
-
-type ReportFile struct {
-	Version string
-	Sha     string
-	Report  *Report
-}
 
 var artifactNameRegex = regexp.MustCompile(`^(?P<version>[A-z0-9_\-]+)[_-]report(?:[_-].*)?$`)
 
 func FetchReportFiles(
 	ctx context.Context,
+	db *database.DB,
 	logger zerolog.Logger,
 	client *github.Client,
-	repoOwner, repoName, sha string,
+	project *common.Project,
+	commit *common.Commit,
 	runId int64,
-) ([]ReportFile, error) {
+) ([]common.ReportFile, error) {
 	logger = logger.With().
-		Str("commit_sha", sha).
+		Str("commit_sha", commit.Sha).
 		Int64("workflow_run_id", runId).
 		Logger()
 
-	artifacts, _, err := client.Actions.ListWorkflowRunArtifacts(ctx, repoOwner, repoName, runId, nil)
+	artifacts, _, err := client.Actions.ListWorkflowRunArtifacts(ctx, project.Owner, project.Name, runId, nil)
 	if err != nil {
 		logger.Error().
 			Err(err).
@@ -44,7 +41,7 @@ func FetchReportFiles(
 		return nil, errors.Wrap(err, "failed to list workflow run artifacts")
 	}
 
-	files := make([]ReportFile, 0)
+	files := make([]common.ReportFile, 0)
 	for _, artifact := range artifacts.Artifacts {
 		logger := logger.With().
 			Str("artifact_name", artifact.GetName()).
@@ -58,7 +55,21 @@ func FetchReportFiles(
 		}
 		version := matches[artifactNameRegex.SubexpIndex("version")]
 
-		artifactUrl, _, err := client.Actions.DownloadArtifact(ctx, repoOwner, repoName, artifact.GetID(), 3)
+		start := time.Now()
+		existing, err := db.GetReport(ctx, project.ID, version, commit.Sha)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("failed to check if report exists")
+		}
+		if existing != nil {
+			end := time.Now()
+			logger.Info().
+				Str("duration", end.Sub(start).String()).
+				Msg("Report already exists")
+			files = append(files, *existing)
+			continue
+		}
+
+		artifactUrl, _, err := client.Actions.DownloadArtifact(ctx, project.Owner, project.Name, artifact.GetID(), 3)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get artifact download url")
 		}
@@ -80,11 +91,21 @@ func FetchReportFiles(
 			return nil, err
 		}
 		if report != nil {
-			files = append(files, ReportFile{
+			file := common.ReportFile{
+				Project: project,
 				Version: version,
-				Sha:     sha,
+				Commit:  commit,
 				Report:  report,
-			})
+			}
+			start := time.Now()
+			if err = db.InsertReport(ctx, &file); err != nil {
+				return nil, errors.Wrap(err, "failed to insert report")
+			}
+			end := time.Now()
+			logger.Info().
+				Str("duration", end.Sub(start).String()).
+				Msg("Inserted report")
+			files = append(files, file)
 		}
 	}
 
@@ -97,7 +118,7 @@ func FetchReportFiles(
 
 // findReportFile reads the zip stream and writes the report file to the output path
 // Returns true if the report file was found and written
-func findReportFile(logger zerolog.Logger, r io.Reader) (*Report, error) {
+func findReportFile(logger zerolog.Logger, r io.Reader) (*common.Report, error) {
 	zr := zipstream.NewReader(r)
 	for {
 		entry, err := zr.Next()
@@ -113,8 +134,8 @@ func findReportFile(logger zerolog.Logger, r io.Reader) (*Report, error) {
 			return nil, errors.Wrap(err, "failed to read report file")
 		}
 		if strings.HasSuffix(entry.Name, "report.json") {
-			report := &Report{}
-			err := parseJson(data, report)
+			report := &common.Report{}
+			err := common.ParseReportJson(data, report)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to read report file")
 			}
@@ -124,7 +145,7 @@ func findReportFile(logger zerolog.Logger, r io.Reader) (*Report, error) {
 			return report, nil
 		} else if strings.HasSuffix(entry.Name, "report.binpb") ||
 			strings.HasSuffix(entry.Name, "report.pb") {
-			report := &Report{}
+			report := &common.Report{}
 			err = proto.Unmarshal(data, report)
 			if err != nil {
 				return nil, err
@@ -136,33 +157,4 @@ func findReportFile(logger zerolog.Logger, r io.Reader) (*Report, error) {
 		}
 	}
 	return nil, nil
-}
-
-func parseJson(data []byte, v *Report) error {
-	err := protojson.Unmarshal(data, v)
-	if err != nil {
-		// Try to parse as legacy report
-		legacy := &legacyReport{}
-		if other := json.Unmarshal(data, legacy); other != nil {
-			// Return the original error
-			return err
-		}
-		*v = *legacy.convert()
-	}
-	return nil
-}
-
-func (m *Measures) CalcMatchedPercent() {
-	m.MatchedCodePercent = 100
-	if m.TotalCode != 0 {
-		m.MatchedCodePercent = float32(m.MatchedCode) / float32(m.TotalCode) * 100
-	}
-	m.MatchedDataPercent = 100
-	if m.TotalData != 0 {
-		m.MatchedDataPercent = float32(m.MatchedData) / float32(m.TotalData) * 100
-	}
-	m.MatchedFunctionsPercent = 100
-	if m.TotalFunctions != 0 {
-		m.MatchedFunctionsPercent = float32(m.MatchedFunctions) / float32(m.TotalFunctions) * 100
-	}
 }

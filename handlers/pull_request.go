@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"github.com/encounter/decompal/common"
 	"github.com/encounter/decompal/config"
+	"github.com/encounter/decompal/database"
 	"github.com/encounter/decompal/objdiff"
 	"github.com/google/go-github/v63/github"
 	"github.com/palantir/go-githubapp/githubapp"
@@ -13,17 +15,20 @@ import (
 type pullRequestHandler struct {
 	githubapp.ClientCreator
 	config  *config.AppConfig
+	db      *database.DB
 	taskCtx context.Context
 }
 
 func NewPullRequestHandler(
 	cc githubapp.ClientCreator,
 	config *config.AppConfig,
+	db *database.DB,
 	taskCtx context.Context,
 ) githubapp.EventHandler {
 	return &pullRequestHandler{
 		ClientCreator: cc,
 		config:        config,
+		db:            db,
 		taskCtx:       taskCtx,
 	}
 }
@@ -53,17 +58,27 @@ func (h *pullRequestHandler) Handle(_ context.Context, eventType, deliveryID str
 		ctx, logger := githubapp.PrepareRepoContext(ctx, installationID, repo)
 
 		// Find any completed workflow runs for the current PR
-		repoOwner := repo.GetOwner().GetLogin()
-		repoName := repo.GetName()
+		project := &common.Project{
+			ID:    repo.GetID(),
+			Owner: repo.GetOwner().GetLogin(),
+			Name:  repo.GetName(),
+		}
 		pr := event.GetPullRequest()
-		sha := pr.GetHead().GetSHA()
+		ghc, _, err := client.Git.GetCommit(ctx, project.Owner, project.Name, pr.GetHead().GetSHA())
+		if err != nil {
+			return errors.Wrap(err, "failed to get commit")
+		}
+		commit := &common.Commit{
+			Sha:       ghc.GetSHA(),
+			Timestamp: ghc.GetCommitter().GetDate().Time,
+		}
 		runs, _, err := client.Actions.ListRepositoryWorkflowRuns(
 			ctx,
-			repoOwner,
-			repoName,
+			project.Owner,
+			project.Name,
 			&github.ListWorkflowRunsOptions{
 				Status:              "completed",
-				HeadSHA:             sha,
+				HeadSHA:             commit.Sha,
 				ExcludePullRequests: true,
 			},
 		)
@@ -76,16 +91,16 @@ func (h *pullRequestHandler) Handle(_ context.Context, eventType, deliveryID str
 		}
 
 		// Find report files in any completed workflow runs
-		var files []objdiff.ReportFile
+		var files []common.ReportFile
 		var run *github.WorkflowRun
 		for _, run = range runs.WorkflowRuns {
 			files, err = objdiff.FetchReportFiles(
 				ctx,
+				h.db,
 				logger,
 				client,
-				repoOwner,
-				repoName,
-				sha,
+				project,
+				commit,
 				run.GetID(),
 			)
 			if err != nil {
@@ -103,10 +118,11 @@ func (h *pullRequestHandler) Handle(_ context.Context, eventType, deliveryID str
 		// Generate changes and create a PR comment
 		err = processPR(
 			ctx,
+			h.db,
 			h.config,
 			installationID,
 			pr,
-			sha,
+			commit,
 			client,
 			repo,
 			run.GetWorkflowID(),

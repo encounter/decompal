@@ -16,8 +16,9 @@ type Config struct {
 }
 
 type AppConfig struct {
-	//TmpDir      string `yaml:"tmp_dir"`
+	DbPath      string `yaml:"db_path"`
 	ObjdiffPath string `yaml:"objdiff_path"`
+	GitHubToken string `yaml:"github_token"` // Personal access token for testing
 }
 
 func ReadConfig(path string) (Config, error) {

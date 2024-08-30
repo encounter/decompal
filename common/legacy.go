@@ -1,4 +1,4 @@
-package objdiff
+package common
 
 import (
 	"strconv"

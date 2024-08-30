@@ -4,7 +4,7 @@
 // 	protoc        v5.27.3
 // source: report.proto
 
-package objdiff
+package common
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"

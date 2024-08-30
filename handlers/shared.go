@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"github.com/encounter/decompal/common"
 	"github.com/encounter/decompal/config"
+	"github.com/encounter/decompal/database"
 	"github.com/encounter/decompal/objdiff"
 	"github.com/google/go-github/v63/github"
 	"github.com/palantir/go-githubapp/githubapp"
@@ -13,40 +15,52 @@ import (
 
 func processPR(
 	ctx context.Context,
+	db *database.DB,
 	config *config.AppConfig,
 	installationID int64,
 	pr *github.PullRequest,
-	sha string,
+	headCommit *common.Commit,
 	client *github.Client,
 	repo *github.Repository,
 	workflowID int64,
-	files []objdiff.ReportFile,
+	files []common.ReportFile,
 ) error {
 	prNum := pr.GetNumber()
 	ctx, logger := githubapp.PreparePRContext(ctx, installationID, repo, prNum)
 
 	// Sanity check
 	head := pr.GetHead()
-	if head.GetSHA() != sha {
+	if head.GetSHA() != headCommit.Sha {
 		logger.Debug().
 			Str("head_sha", head.GetSHA()).
-			Str("commit_sha", sha).
+			Str("commit_sha", headCommit.Sha).
 			Msg("Head SHA does not match workflow run SHA")
 		return nil
 	}
 
 	// Find workflows runs for the PR base commit
+	project := &common.Project{
+		ID:    repo.GetID(),
+		Owner: repo.GetOwner().GetLogin(),
+		Name:  repo.GetName(),
+	}
 	base := pr.GetBase()
-	repoOwner := repo.GetOwner().GetLogin()
-	repoName := repo.GetName()
+	ghc, _, err := client.Git.GetCommit(ctx, project.Owner, project.Name, base.GetSHA())
+	if err != nil {
+		return errors.Wrap(err, "failed to get commit")
+	}
+	baseCommit := &common.Commit{
+		Sha:       ghc.GetSHA(),
+		Timestamp: ghc.GetCommitter().GetDate().Time,
+	}
 	runs, _, err := client.Actions.ListWorkflowRunsByID(
 		ctx,
-		repoOwner,
-		repoName,
+		project.Owner,
+		project.Name,
 		workflowID,
 		&github.ListWorkflowRunsOptions{
 			Status:              "completed",
-			HeadSHA:             base.GetSHA(),
+			HeadSHA:             baseCommit.Sha,
 			ExcludePullRequests: true,
 		},
 	)
@@ -55,7 +69,7 @@ func processPR(
 	}
 	if len(runs.WorkflowRuns) == 0 {
 		logger.Debug().
-			Str("commit_sha", base.GetSHA()).
+			Str("commit_sha", baseCommit.Sha).
 			Msg("No base workflow runs found")
 		return nil
 	}
@@ -64,11 +78,11 @@ func processPR(
 	baseRun := runs.WorkflowRuns[0]
 	baseFiles, err := objdiff.FetchReportFiles(
 		ctx,
+		db,
 		logger,
 		client,
-		repoOwner,
-		repoName,
-		base.GetSHA(),
+		project,
+		baseCommit,
 		baseRun.GetID(),
 	)
 	if err != nil {
@@ -93,8 +107,8 @@ func processPR(
 			if baseFile.Version == file.Version {
 				logger := logger.With().
 					Str("version", file.Version).
-					Str("from_sha", baseFile.Sha).
-					Str("to_sha", file.Sha).
+					Str("from_sha", baseFile.Commit.Sha).
+					Str("to_sha", file.Commit.Sha).
 					Logger()
 				logger.Info().Msg("Generating changes")
 				changes, err := objdiff.GenerateChanges(config, logger, &baseFile, &file)
@@ -128,7 +142,7 @@ func processPR(
 	}
 
 	// Update or create PR comment
-	err = upsertComment(ctx, client, repoOwner, repoName, prNum, body)
+	err = upsertComment(ctx, client, project, prNum, body)
 	if err != nil {
 		return err
 	}
@@ -138,13 +152,13 @@ func processPR(
 func upsertComment(
 	ctx context.Context,
 	client *github.Client,
-	repoOwner, repoName string,
+	project *common.Project,
 	prNum int,
 	body string,
 ) error {
 	sort := "created"
 	direction := "asc"
-	existing, _, err := client.Issues.ListComments(ctx, repoOwner, repoName, prNum, &github.IssueListCommentsOptions{
+	existing, _, err := client.Issues.ListComments(ctx, project.Owner, project.Name, prNum, &github.IssueListCommentsOptions{
 		Sort:      &sort,
 		Direction: &direction,
 	})
@@ -164,14 +178,14 @@ func upsertComment(
 		}
 	}
 	if commentID != 0 {
-		_, _, err = client.Issues.EditComment(ctx, repoOwner, repoName, commentID, &github.IssueComment{
+		_, _, err = client.Issues.EditComment(ctx, project.Owner, project.Name, commentID, &github.IssueComment{
 			Body: github.String(body),
 		})
 		if err != nil {
 			return errors.Wrap(err, "failed to edit comment")
 		}
 	} else {
-		_, _, err = client.Issues.CreateComment(ctx, repoOwner, repoName, prNum, &github.IssueComment{
+		_, _, err = client.Issues.CreateComment(ctx, project.Owner, project.Name, prNum, &github.IssueComment{
 			Body: github.String(body),
 		})
 		if err != nil {
@@ -181,7 +195,7 @@ func upsertComment(
 	return nil
 }
 
-func createChanges(changes *objdiff.Changes) string {
+func createChanges(changes *common.Changes) string {
 	out := "### Overall\n\n"
 	overallTable := measuresTable(changes.From, changes.To)
 	if overallTable == "" {
@@ -206,7 +220,7 @@ func createChanges(changes *objdiff.Changes) string {
 	return out
 }
 
-func changeItemTable(name string, items []*objdiff.ChangeItem) string {
+func changeItemTable(name string, items []*common.ChangeItem) string {
 	header := fmt.Sprintf("|%s|Previous|Current|Change|\n|-|-|-|-|", name)
 	rows := make([]string, 0)
 	for _, item := range items {
@@ -246,7 +260,7 @@ func intArrow(diff int64) string {
 	return ""
 }
 
-func changeItemInfoRow(item *objdiff.ChangeItem) string {
+func changeItemInfoRow(item *common.ChangeItem) string {
 	var fromPercent, toPercent float32
 	if item.From != nil {
 		fromPercent = item.From.FuzzyMatchPercent
@@ -268,15 +282,15 @@ func changeItemInfoRow(item *objdiff.ChangeItem) string {
 	)
 }
 
-func measuresTable(prev, curr *objdiff.Measures) string {
+func measuresTable(prev, curr *common.Measures) string {
 	if prev == nil && curr == nil {
 		return ""
 	} else if prev == nil {
 		// TODO: added
-		prev = &objdiff.Measures{}
+		prev = &common.Measures{}
 	} else if curr == nil {
 		// TODO: removed
-		curr = &objdiff.Measures{}
+		curr = &common.Measures{}
 	}
 	header := "|Metric|Previous|Current|Change|\n|-|-|-|-|"
 	rows := make([]string, 0)

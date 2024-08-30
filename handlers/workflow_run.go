@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"github.com/encounter/decompal/common"
 	"github.com/encounter/decompal/config"
+	"github.com/encounter/decompal/database"
 	"github.com/encounter/decompal/objdiff"
 	"github.com/google/go-github/v63/github"
 	"github.com/palantir/go-githubapp/githubapp"
@@ -13,17 +15,20 @@ import (
 type workflowRunHandler struct {
 	githubapp.ClientCreator
 	config  *config.AppConfig
+	db      *database.DB
 	taskCtx context.Context
 }
 
 func NewWorkflowRunHandler(
 	cc githubapp.ClientCreator,
 	config *config.AppConfig,
+	db *database.DB,
 	taskCtx context.Context,
 ) githubapp.EventHandler {
 	return &workflowRunHandler{
 		ClientCreator: cc,
 		config:        config,
+		db:            db,
 		taskCtx:       taskCtx,
 	}
 }
@@ -59,18 +64,24 @@ func (h *workflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 		ctx, logger := githubapp.PrepareRepoContext(ctx, installationID, repo)
 
 		// Fetch report files for the current workflow run
-		repoOwner := repo.GetOwner().GetLogin()
-		repoName := repo.GetName()
+		project := &common.Project{
+			ID:    repo.GetID(),
+			Owner: repo.GetOwner().GetLogin(),
+			Name:  repo.GetName(),
+		}
 		run := event.GetWorkflowRun()
 		runId := run.GetID()
-		sha := run.GetHeadSHA()
+		commit := &common.Commit{
+			Sha:       run.GetHeadCommit().GetSHA(),
+			Timestamp: run.GetHeadCommit().GetCommitter().GetDate().Time,
+		}
 		files, err := objdiff.FetchReportFiles(
 			ctx,
+			h.db,
 			logger,
 			client,
-			repoOwner,
-			repoName,
-			sha,
+			project,
+			commit,
 			runId,
 		)
 		if err != nil {
@@ -87,10 +98,11 @@ func (h *workflowRunHandler) Handle(ctx context.Context, eventType, deliveryID s
 			for _, pr := range prs {
 				err = processPR(
 					ctx,
+					h.db,
 					h.config,
 					installationID,
 					pr,
-					sha,
+					commit,
 					client,
 					repo,
 					run.GetWorkflowID(),

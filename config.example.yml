@@ -8,7 +8,9 @@ logging:
   level: debug
 
 app:
+  db_path: ./db.sqlite
   objdiff_path: ./objdiff-cli-linux-x86_64
+  github_token: ghp_1234567890
 
 github:
   v3_api_url: https://api.github.com/

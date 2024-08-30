@@ -1,6 +1,7 @@
 package objdiff
 
 import (
+	"github.com/encounter/decompal/common"
 	"github.com/encounter/decompal/config"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -11,14 +12,14 @@ import (
 func GenerateChanges(
 	config *config.AppConfig,
 	logger zerolog.Logger,
-	prev *ReportFile,
-	curr *ReportFile,
-) (*Changes, error) {
+	prev *common.ReportFile,
+	curr *common.ReportFile,
+) (*common.Changes, error) {
 	if config.ObjdiffPath == "" {
 		return nil, errors.New("objdiff_path not set")
 	}
 
-	data, err := proto.Marshal(&ChangesInput{
+	data, err := proto.Marshal(&common.ChangesInput{
 		From: prev.Report,
 		To:   curr.Report,
 	})
@@ -56,7 +57,7 @@ func GenerateChanges(
 		return nil, errors.Wrapf(err, "failed to generate changes: %s", string(output))
 	}
 
-	changes := &Changes{}
+	changes := &common.Changes{}
 	err = proto.Unmarshal(output, changes)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode changes file")
