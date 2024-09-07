@@ -73,11 +73,11 @@ fn transform(
 ) -> Result<CodegenReturn> {
     let source_type = SourceType::from_path(path)?;
     let allocator = Allocator::default();
-    let parsed = Parser::new(&allocator, &source_text, source_type).parse();
+    let parsed = Parser::new(&allocator, source_text, source_type).parse();
     let program = allocator.alloc(parsed.program);
 
-    let (symbols, scopes) = SemanticBuilder::new(&source_text, source_type)
-        .build(&program)
+    let (symbols, scopes) = SemanticBuilder::new(source_text, source_type)
+        .build(program)
         .semantic
         .into_symbol_table_and_scope_tree();
 
@@ -91,7 +91,7 @@ fn transform(
         &allocator,
         path,
         source_type,
-        &source_text,
+        source_text,
         parsed.trivias.clone(),
         transform_options,
     )

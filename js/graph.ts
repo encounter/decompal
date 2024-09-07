@@ -10,48 +10,75 @@ type Unit = {
 
 const unitBounds = (unit: Unit, width: number, height: number) => {
     return {
-        x: (unit.x / 100) * width,
-        y: (unit.y / 100) * height,
-        w: (unit.w / 100) * width,
-        h: (unit.h / 100) * height,
+        x: unit.x * width,
+        y: unit.y * height,
+        w: unit.w * width,
+        h: unit.h * height,
     };
 }
 
-const TOOLTIP_PADDING = 10;
-const TOOLTIP_MARGIN = 10;
+const BORDER_RADIUS = 5;
+const PADDING_W = 10;
+const PADDING_H = 5;
+const MARGIN = 5;
 
 const drawTooltip = (ctx: CanvasRenderingContext2D, unit: Unit, width: number, height: number) => {
+    const style = getComputedStyle(ctx.canvas);
+    const fontWeight = style.getPropertyValue('--font-weight') || 'normal';
+    const fontSize = style.getPropertyValue('--font-size') || '16px';
+    const fontFamily = style.getPropertyValue('--font-family') || 'sans-serif';
+    const tooltipBackground = style.getPropertyValue('--tooltip-background') || "#fff"
+    ctx.font = `${fontWeight} ${fontSize} ${fontFamily}`;
+    ctx.textBaseline = "middle";
+
     const {x, y, w, h} = unitBounds(unit, width, height);
     const text = `${unit.name} • ${unit.fuzzy_match_percent.toFixed(2)}%`;
     const m = ctx.measureText(text);
-    const hw = m.actualBoundingBoxRight + m.actualBoundingBoxLeft + TOOLTIP_PADDING * 2;
-    const bh = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent + TOOLTIP_PADDING * 2;
-    let bx = x + (w - hw) / 2 + TOOLTIP_PADDING;
-    let by = y - TOOLTIP_MARGIN;
+    const bw = m.actualBoundingBoxRight + m.actualBoundingBoxLeft + PADDING_W * 2;
+    const bh = m.fontBoundingBoxAscent + m.fontBoundingBoxDescent + PADDING_H * 2;
+    const margin = isTouch ? MARGIN * 2 : MARGIN;
+    let bx = x + (w - bw) / 2 + PADDING_W;
+    let by = y - bh - margin;
+    let invY = false;
+    if (bx + bw > width) {
+        bx = width - bw;
+    }
     if (bx < 0) {
         bx = 0;
     }
-    if (bx + hw > width) {
-        bx = width - hw;
+    if (by < 0) {
+        by = y + h + margin;
+        invY = true;
     }
-    if (by - bh < 0) {
-        by = y + h + bh + TOOLTIP_MARGIN;
+    ctx.fillStyle = tooltipBackground;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, BORDER_RADIUS);
+    // Arrow
+    const ax = x + w / 2;
+    if (invY) {
+        ctx.moveTo(ax, y + h);
+        ctx.lineTo(ax + margin, y + h + margin);
+        ctx.lineTo(ax - margin, y + h + margin);
+    } else {
+        ctx.moveTo(ax, y);
+        ctx.lineTo(ax + margin, y - margin);
+        ctx.lineTo(ax - margin, y - margin);
     }
-    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.fillRect(bx, by - m.actualBoundingBoxAscent - TOOLTIP_PADDING * 2, hw, bh);
+    ctx.fill();
     ctx.fillStyle = "#000";
-    ctx.fillText(text, bx + TOOLTIP_PADDING, by - TOOLTIP_PADDING);
+    ctx.fillText(text, bx + PADDING_W, by + bh / 2);
 };
 
 let hovered = null;
 let dirty = false;
+let isTouch = false;
 
 const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
     if (!canvas.getContext) {
         return;
     }
-    const ratio = window.devicePixelRatio;
     const {width, height} = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio;
     const renderWidth = width * ratio;
     const renderHeight = height * ratio;
     if (!dirty && canvas.width === renderWidth && canvas.height === renderHeight) {
@@ -59,25 +86,23 @@ const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
         return;
     }
     dirty = false;
+    // High DPI support
     if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
         canvas.width = renderWidth;
         canvas.height = renderHeight;
     }
-    const style = getComputedStyle(canvas);
-    const fontWeight = style.getPropertyValue('--font-weight') || 'normal';
-    const fontSize = style.getPropertyValue('--font-size') || '16px';
-    const fontFamily = style.getPropertyValue('--font-family') || 'sans-serif';
     const ctx = canvas.getContext("2d");
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0); // Scale to device pixel ratio
     ctx.clearRect(0, 0, width, height);
-    ctx.font = `${fontWeight} ${fontSize} ${fontFamily}`;
     ctx.lineWidth = 1;
     ctx.strokeStyle = "#000";
     for (const unit of units) {
         const {x, y, w, h} = unitBounds(unit, width, height);
         ctx.fillStyle = unit.color;
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeRect(x, y, w, h);
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.fill();
+        ctx.stroke();
     }
     if (hovered) {
         const {x, y, w, h} = unitBounds(hovered, width, height);
@@ -123,9 +148,15 @@ const drawGraph = (id: string, units: Unit[]) => {
         dirty = true;
         queueDraw();
     };
-    canvas.addEventListener("mousemove", handleHover);
+    canvas.addEventListener("mousemove", (e) => {
+        isTouch = false;
+        handleHover(e);
+    });
     canvas.addEventListener("mouseleave", handleLeave);
-    canvas.addEventListener("touchmove", (e) => handleHover(e.touches[0]));
+    canvas.addEventListener("touchmove", (e) => {
+        isTouch = true;
+        handleHover(e.touches[0]);
+    });
     canvas.addEventListener("touchend", handleLeave);
     draw(canvas, units);
 };

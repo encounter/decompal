@@ -255,7 +255,8 @@ $unit-size: 0.75rem;
   margin-bottom: var(--pico-spacing);
   touch-action: none;
   // Accessed via JS
-  --font-weight: 400;
-  --font-size: 1rem;
+  --font-weight: normal;
+  --font-size: 0.875rem;
   --font-family: var(--pico-font-family);
+  --tooltip-background: var(--pico-tooltip-background-color);
 }

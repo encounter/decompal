@@ -13,7 +13,7 @@ grass = "0.13"
 image = "0.25"
 lightningcss = "1.0.0-alpha"
 mime = "0.3"
-minijinja = { version = "2.2", features = ["loader"] }
+minijinja = { version = "2.2", features = ["loader", "json"] }
 minijinja-autoreload = "2.2"
 moka = { version = "0.12", features = ["future"] }
 objdiff-core = { git = "https://github.com/encounter/objdiff", tag = "v2.0.0-beta.6", features = ["bindings"] }
@@ -36,6 +36,6 @@ tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.5", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-treemap = "0.3"
+url = { version = "2.5", features = ["serde"] }
 zip = { version = "2.2", default-features = false, features = ["deflate-flate2"] }
 zstd = "0.13"

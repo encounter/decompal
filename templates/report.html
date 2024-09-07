@@ -7,15 +7,15 @@
     <meta name="darkreader-lock">
     <meta name="description" content="Decompilation progress report for {{ project_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %}">
     <title>{{ project_short_name }}{% if current_category.id != "all" %} ({{ current_category.name }}){% endif %} • Progress Report</title>
-    <link rel="stylesheet" href="/css/main.min.css?2">
+    <link rel="stylesheet" href="/css/main.min.css?3">
     <script src="https://unpkg.com/htmx.org@2.0.2"
             integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
             crossorigin="anonymous"></script>
-    <script src="/js/graph.min.js?2"></script>
-    <meta property="og:type" content="website">
+    <script src="/js/graph.min.js?5"></script>
     <meta property="og:title" content="{{ project_short_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %} is {{ measures.matched_code_percent | round(2) }}% decompiled">
     <meta property="og:description" content="Decompilation progress report for {{ project_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %}">
-    <meta property="og:image" content="https://decomp.dev{{ project_path | safe }}/{{ version }}/{{ commit }}.png">
+    <meta property="og:image" content="{{ image_url | safe }}">
+    <meta property="og:url" content="{{ canonical_url | safe }}">
 </head>
 <body>
 <header>
@@ -37,7 +37,7 @@
                     <summary>{{ version }}</summary>
                     <ul dir="rtl">
                         {% for version in versions %}
-                        <li><a href="{{ project_path | safe }}/{{ version }}">{{ version }}</a></li>
+                        <li><a href="{{ version.path | safe }}">{{ version.id }}</a></li>
                         {% endfor %}
                     </ul>
                 </details>
@@ -94,17 +94,17 @@
         <summary>{{ current_category.name }}</summary>
         <ul>
             {% for category in categories %}
-            <li><a href="?category={{ category.id }}">{{ category.name }}</a></li>
+            <li><a href="{{ category.path | safe }}">{{ category.name }}</a></li>
             {% endfor %}
         </ul>
     </details>
     {% endif %}
     <script>
         document.write('<canvas id="graph" width="100%" data-hx-preserve="true"></canvas>');
-        drawGraph("graph", {{ units_json | safe }});
+        drawGraph("graph", {{ units | tojson }});
     </script>
     <noscript>
-        <img id="graph" src="{{ project_path | safe }}/{{ version }}/{{ commit }}.png" alt="Progress graph">
+        <img id="graph" src="{{ image_url | safe }}" alt="Progress graph">
     </noscript>
     <h6 class="report-header">Links</h6>
     <div>

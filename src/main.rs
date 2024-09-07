@@ -5,6 +5,7 @@ mod github;
 mod handlers;
 mod models;
 mod templates;
+mod util;
 
 use std::{
     fs::File,
@@ -51,10 +52,13 @@ async fn main() {
     // Run our service
     let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, state.config.server.port));
     tracing::info!("Listening on {}", addr);
-    axum::serve(TcpListener::bind(addr).await.expect("bind error"), app(state).into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .expect("server error");
+    axum::serve(
+        TcpListener::bind(addr).await.expect("bind error"),
+        app(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .expect("server error");
 
     scheduler.shutdown().await.expect("Failed to shut down scheduler");
     db.close().await;

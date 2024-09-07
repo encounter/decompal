@@ -2,21 +2,23 @@ use std::{iter, str::FromStr, time::Instant};
 
 use anyhow::{Context, Result};
 use axum::{
-    extract::{Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
+    extract::{ Path, Query, State},
+    http::{header, HeaderMap, StatusCode, Uri},
     response::{Html, IntoResponse, Response},
     Json,
 };
 use image::ImageFormat;
 use mime::Mime;
-use objdiff_core::bindings::report::Measures;
+use objdiff_core::bindings::report::{Measures, ReportCategory};
 use serde::{Deserialize, Serialize};
+use url::Url;
 
-use super::{graph::layout_units, parse_accept, AppError, Protobuf, PROTOBUF};
+use super::{graph::layout_units, parse_accept, AppError, FullUri, Protobuf, PROTOBUF};
 use crate::{
     handlers::graph::{render_image, render_svg, unit_color},
     models::{Project, ProjectInfo, ReportFile},
     templates::render,
+    util::UrlExt,
     AppState,
 };
 
@@ -55,12 +57,14 @@ struct ReportTemplateContext<'a> {
     version: &'a str,
     measures: TemplateMeasures,
     units: &'a [ReportTemplateUnit<'a>],
-    versions: &'a [String],
+    versions: &'a [ReportTemplateVersion<'a>],
     prev_commit: Option<&'a str>,
     next_commit: Option<&'a str>,
     categories: &'a [ReportCategoryItem<'a>],
     current_category: &'a ReportCategoryItem<'a>,
-    units_json: String,
+    canonical_path: &'a str,
+    canonical_url: &'a str,
+    image_url: &'a str,
 }
 
 #[derive(Serialize)]
@@ -74,14 +78,17 @@ pub struct ReportTemplateUnit<'a> {
     h: f32,
 }
 
-#[derive(Serialize, Copy, Clone)]
+#[derive(Serialize, Clone)]
 struct ReportCategoryItem<'a> {
     id: &'a str,
     name: &'a str,
+    path: String,
 }
 
-impl Default for ReportCategoryItem<'static> {
-    fn default() -> Self { Self { id: "all", name: "All" } }
+#[derive(Serialize, Clone)]
+struct ReportTemplateVersion<'a> {
+    id: &'a str,
+    path: String,
 }
 
 /// Duplicate of Measures to avoid omitting empty fields
@@ -159,13 +166,14 @@ fn extract_extension(params: ReportParams) -> (ReportParams, Option<String>) {
     } else if let Some((repo, ext)) = params.repo.rsplit_once('.') {
         return (ReportParams { repo: repo.to_string(), ..params }, Some(ext.to_string()));
     }
-    return (params, None);
+    (params, None)
 }
 
 pub async fn get_report(
     Path(params): Path<ReportParams>,
     Query(query): Query<ReportQuery>,
     headers: HeaderMap,
+    FullUri(uri): FullUri,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
     let start = Instant::now();
@@ -225,9 +233,10 @@ pub async fn get_report(
                 &report,
                 &project_info,
                 measures,
-                &current_category,
+                current_category,
                 &units,
                 &state,
+                uri,
             )?;
             let elapsed = start.elapsed();
             rendered = rendered.replace("[[time]]", &format!("{}ms", elapsed.as_millis()));
@@ -274,15 +283,15 @@ const EMPTY_MEASURES: Measures = Measures {
 fn apply_category<'a>(
     report: &'a ReportFile,
     query: &ReportQuery,
-) -> Result<(&'a Measures, ReportCategoryItem<'a>, Vec<ReportTemplateUnit<'a>>)> {
+) -> Result<(&'a Measures, Option<&'a ReportCategory>, Vec<ReportTemplateUnit<'a>>)> {
     let mut measures = report.report.measures.as_ref().unwrap_or(&EMPTY_MEASURES);
-    let mut current_category = ReportCategoryItem::default();
+    let mut current_category = None;
     let mut category_id_filter = None;
     if let Some(category) =
         query.category.as_ref().and_then(|id| report.report.categories.iter().find(|c| c.id == *id))
     {
         measures = category.measures.as_ref().unwrap_or(&EMPTY_MEASURES);
-        current_category = ReportCategoryItem { id: &category.id, name: &category.name };
+        current_category = Some(category);
         category_id_filter = Some(category.id.clone());
     }
     let (w, h) = query.size();
@@ -313,10 +322,10 @@ fn apply_category<'a>(
             name: &unit.name,
             fuzzy_match_percent: match_percent,
             color: unit_color(match_percent),
-            x: bounds.x * 100.0,
-            y: bounds.y * 100.0,
-            w: bounds.w * 100.0,
-            h: bounds.h * 100.0,
+            x: bounds.x,
+            y: bounds.y,
+            w: bounds.w,
+            h: bounds.h,
         }
     })
     .collect();
@@ -327,35 +336,67 @@ fn render_template(
     report: &ReportFile,
     project_info: &ProjectInfo,
     measures: &Measures,
-    current_category: &ReportCategoryItem,
+    current_category: Option<&ReportCategory>,
     units: &[ReportTemplateUnit],
     state: &AppState,
+    uri: Uri,
 ) -> Result<String> {
-    let categories = iter::once(ReportCategoryItem::default())
-        .chain(
-            report
-                .report
-                .categories
-                .iter()
-                .map(|c| ReportCategoryItem { id: &c.id, name: &c.name }),
-        )
+    let request_url = Url::parse(&uri.to_string()).context("Failed to parse URI")?;
+    let project_base_path =
+        format!("/{}/{}", project_info.project.owner, project_info.project.repo);
+    let canonical_url = request_url.with_path(&format!(
+        "/{}/{}/{}/{}",
+        project_info.project.owner, project_info.project.repo, report.version, report.commit.sha
+    ));
+    let image_url = canonical_url.with_path(&format!("{}.png", canonical_url.path()));
+
+    let versions = project_info
+        .report_versions
+        .iter()
+        .map(|version| {
+            let version_url = request_url.with_path(&format!(
+                "/{}/{}/{}/{}",
+                project_info.project.owner, project_info.project.repo, version, report.commit.sha
+            ));
+            ReportTemplateVersion { id: version, path: version_url.path_and_query().to_string() }
+        })
         .collect::<Vec<_>>();
-    let units_json = serde_json::to_string(&units).context("Failed to serialize units")?;
+
+    let all_url = canonical_url.set_query("category", None);
+    let all_category =
+        ReportCategoryItem { id: "all", name: "All", path: all_url.path_and_query().to_string() };
+    let current_category = current_category
+        .map(|c| {
+            let path =
+                canonical_url.set_query("category", Some(&c.id)).path_and_query().to_string();
+            ReportCategoryItem { id: &c.id, name: &c.name, path }
+        })
+        .unwrap_or_else(|| all_category.clone());
+    let categories = iter::once(all_category)
+        .chain(report.report.categories.iter().map(|c| {
+            let path =
+                canonical_url.set_query("category", Some(&c.id)).path_and_query().to_string();
+            ReportCategoryItem { id: &c.id, name: &c.name, path }
+        }))
+        .collect::<Vec<_>>();
+
     render(&state.templates, "report.html", ReportTemplateContext {
         project: &report.project,
         project_name: &report.project.name(),
-        project_short_name: &report.project.short_name(),
+        project_short_name: report.project.short_name(),
         project_url: &report.project.repo_url(),
-        project_path: &format!("/{}/{}", report.project.owner, report.project.repo),
+        project_path: &project_base_path,
         commit: &report.commit.sha,
         version: &report.version,
         measures: TemplateMeasures::from(measures),
         units,
-        versions: &project_info.report_versions,
+        versions: &versions,
         prev_commit: project_info.prev_commit.as_deref(),
         next_commit: project_info.next_commit.as_deref(),
         categories: &categories,
-        current_category,
-        units_json,
+        current_category: &current_category,
+        canonical_path: canonical_url.path_and_query(),
+        canonical_url: canonical_url.as_ref(),
+        image_url: image_url.as_ref(),
     })
 }
