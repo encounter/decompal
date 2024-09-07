@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id AS \"id!\", owner, repo, name, short_name, default_version\n            FROM projects\n            WHERE owner = ? COLLATE NOCASE AND repo = ? COLLATE NOCASE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "owner",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "repo",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "short_name",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "default_version",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d4de02659c86068320c310dc8c6262c0086a2348ff8726e522aaee6999e61cad"
+}

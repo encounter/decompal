@@ -1,0 +1,55 @@
+
+<!--
+    <div class="graph-root">
+        {% for unit in units %}
+        <div class="unit" data-tooltip="{{ unit.name }} • {{ unit.fuzzy_match_percent | round(2) }}%"
+             style="background-color: {{ unit.color }}; width: {{ unit.w }}%; height: {{ unit.h }}%; left: {{ unit.x }}%; top: {{ unit.y }}%"></div>
+        {% endfor %}
+    </div>
+    <svg class="svg-graph-root" viewBox="0 0 950 475" xmlns="http://www.w3.org/2000/svg">
+        <style>
+            .unit {
+                stroke: #000;
+                stroke-width: 1;
+            }
+        </style>
+        {% for unit in units %}
+        <rect width="{{ unit.w }}%" height="{{ unit.h }}%" fill="{{ unit.color }}"
+              x="{{ unit.x }}%" y="{{ unit.y }}%" class="unit"/>
+        {% endfor %}
+    </svg>
+-->
+
+<!--
+.graph-root {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  position: relative;
+  margin-bottom: var(--pico-spacing);
+
+  .unit {
+    position: absolute;
+    background-color: #333;
+    border: 1px solid #000;
+
+    &:hover {
+      border: 1px solid #fff;
+    }
+  }
+}
+
+.svg-graph-root {
+  width: 100%;
+  margin-bottom: var(--pico-spacing);
+
+  .unit {
+    //outline: #000 solid 1px;
+    //outline-offset: -2px;
+
+    &:hover {
+      outline-color: #fff !important;
+      stroke: #fff !important;
+    }
+  }
+}
+-->

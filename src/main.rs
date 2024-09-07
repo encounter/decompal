@@ -1,0 +1,95 @@
+mod config;
+mod cron;
+mod db;
+mod github;
+mod handlers;
+mod models;
+mod templates;
+
+use std::{
+    fs::File,
+    io::BufReader,
+    net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
+    time::Duration,
+};
+
+use axum::{http::header, Router};
+use tokio::{net::TcpListener, signal};
+use tower::ServiceBuilder;
+use tower_http::{timeout::TimeoutLayer, ServiceBuilderExt};
+
+use crate::{config::Config, db::Database, handlers::build_router, templates::Templates};
+
+#[derive(Clone)]
+struct AppState {
+    config: Config,
+    db: Database,
+    github: github::Client,
+    templates: Templates,
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt::init();
+
+    let config: Config = {
+        let file = BufReader::new(File::open("config.yml").expect("Failed to open config file"));
+        serde_yaml::from_reader(file).expect("Failed to parse config file")
+    };
+    let db = Database::open(&config.app).await.expect("Failed to open database");
+    let github = github::create(&config.app).await.expect("Failed to create GitHub client");
+    let templates = templates::create("templates");
+    let state = AppState { config, db: db.clone(), github, templates };
+
+    // Refresh before starting the server
+    // cron::refresh_projects(&mut state).await.expect("Failed to refresh projects");
+
+    // Start the task scheduler
+    let mut scheduler = cron::create(state.clone()).await.expect("Failed to create scheduler");
+
+    // Run our service
+    let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, state.config.server.port));
+    tracing::info!("Listening on {}", addr);
+    axum::serve(TcpListener::bind(addr).await.expect("bind error"), app(state).into_make_service())
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .expect("server error");
+
+    scheduler.shutdown().await.expect("Failed to shut down scheduler");
+    db.close().await;
+    tracing::info!("Shut down gracefully");
+}
+
+fn app(state: AppState) -> Router {
+    let sensitive_headers: Arc<[_]> = vec![header::AUTHORIZATION, header::COOKIE].into();
+    let middleware = ServiceBuilder::new()
+        .sensitive_request_headers(sensitive_headers.clone())
+        .sensitive_response_headers(sensitive_headers)
+        .trace_for_http()
+        .layer(TimeoutLayer::new(Duration::from_secs(10)))
+        .compression();
+    build_router().layer(middleware).with_state(state)
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+}

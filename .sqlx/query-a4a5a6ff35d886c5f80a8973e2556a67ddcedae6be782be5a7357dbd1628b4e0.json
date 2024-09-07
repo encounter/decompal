@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE report_units\n                SET name = ?\n                WHERE id = ?\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "a4a5a6ff35d886c5f80a8973e2556a67ddcedae6be782be5a7357dbd1628b4e0"
+}

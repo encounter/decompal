@@ -1,25 +1,6 @@
 server:
-  address: 127.0.0.1
-  port: 8080
-  shutdown_wait_time: 15s
-
-logging:
-  pretty: true
-  level: debug
+  port: 3000
 
 app:
-  objdiff_path: ./objdiff-cli-linux-x86_64
-
-github:
-  v3_api_url: https://api.github.com/
-  v4_api_url: https://api.github.com/graphql
-  app:
-    integration_id: 1234
-    webhook_secret: webhook_secret
-    private_key: |
-      -----BEGIN RSA PRIVATE KEY-----
-      ...
-      -----END RSA PRIVATE KEY-----
-  oauth:
-    client_id: client_id
-    client_secret: client_secret
+  db_url: sqlite:./db.sqlite
+  github_token: ghp_abcd1234abcd1234abcd1234abcd1234abcd

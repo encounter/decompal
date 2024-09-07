@@ -1,0 +1,41 @@
+[package]
+name = "decompal-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+axum = "0.7"
+blake3 = "1.5"
+bytes = "1.7"
+chrono = "0.4"
+grass = "0.13"
+image = "0.25"
+lightningcss = "1.0.0-alpha"
+mime = "0.3"
+minijinja = { version = "2.2", features = ["loader"] }
+minijinja-autoreload = "2.2"
+moka = { version = "0.12", features = ["future"] }
+objdiff-core = { git = "https://github.com/encounter/objdiff", tag = "v2.0.0-beta.6", features = ["bindings"] }
+#objdiff-core = { path = "../objdiff/objdiff-core", features = ["bindings"] }
+octocrab = "0.39"
+oxc = { version = "0.27", features = ["codegen", "minifier", "transformer", "semantic"] }
+palette = "0.7"
+prost = "0.13"
+regex = "1.10"
+resvg = "0.43"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono"] }
+streemap = "0.1"
+timeago = { version = "0.4.2", default-features = false, features = ["chrono"] }
+tokio = { version = "1.40", features = ["full"] }
+tokio-cron-scheduler = "0.11"
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+treemap = "0.3"
+zip = { version = "2.2", default-features = false, features = ["deflate-flate2"] }
+zstd = "0.13"

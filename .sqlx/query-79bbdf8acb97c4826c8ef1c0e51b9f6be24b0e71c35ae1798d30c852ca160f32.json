@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                INSERT INTO report_units (id, data, name)\n                VALUES (?, ?, ?)\n                ON CONFLICT (id) DO NOTHING\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "79bbdf8acb97c4826c8ef1c0e51b9f6be24b0e71c35ae1798d30c852ca160f32"
+}

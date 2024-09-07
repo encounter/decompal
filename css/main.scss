@@ -1,0 +1,261 @@
+@use "sass:map";
+
+$breakpoints: (
+  // Small (landscape phones)
+  // Font size: 17px
+        sm:
+        (
+                breakpoint: 576px,
+                viewport: 510px,
+                root-font-size: 106.25%,
+        ),
+  // Medium (tablets)
+  // Font size: 18px
+        md:
+        (
+                breakpoint: 768px,
+                viewport: 700px,
+                root-font-size: 112.5%,
+        ),
+  // Large
+  // Font size: 19px
+        lg:
+        (
+                breakpoint: 1024px,
+                viewport: 950px,
+                root-font-size: 118.75%,
+        ),
+  // Max out at lg breakpoint
+        xl:
+        (
+                breakpoint: 1024px,
+                viewport: 950px,
+                root-font-size: 118.75%,
+        ),
+        xxl:
+        (
+                breakpoint: 1024px,
+                viewport: 950px,
+                root-font-size: 118.75%,
+        ),
+);
+@use "@picocss/pico/scss/pico" with (
+  $theme-color: "azure",
+  $breakpoints: $breakpoints,
+  $enable-semantic-container: true,
+  $enable-classes: true,
+  $modules: (
+    // Theme
+    "themes/default": true,
+
+    // Layout
+    "layout/document": true,
+    "layout/landmarks": true,
+    "layout/container": true,
+    "layout/section": true,
+    "layout/grid": true,
+    "layout/overflow-auto": true,
+
+    // Content
+    "content/link": true,
+    "content/typography": true,
+    "content/embedded": true,
+    "content/button": true,
+    "content/table": true,
+    "content/code": true,
+    "content/figure": true,
+    "content/miscs": true,
+
+    // Forms
+    "forms/basics": true,
+    "forms/checkbox-radio-switch": true,
+    "forms/input-color": true,
+    "forms/input-date": true,
+    "forms/input-file": true,
+    "forms/input-range": true,
+    "forms/input-search": true,
+
+    // Components
+    "components/accordion": true,
+    "components/card": true,
+    "components/dropdown": true,
+    "components/group": true,
+    "components/loading": true,
+    "components/modal": true,
+    "components/nav": true,
+    "components/progress": false,
+    "components/tooltip": true,
+
+    // Utilities
+    "utilities/accessibility": true,
+    "utilities/reduce-motion": true
+  )
+);
+@use "@picocss/pico/scss/colors" as *;
+
+[data-theme=light],
+:root:not([data-theme=dark]) {
+  --pico-code-kbd-color: #000;
+  --pico-code-kbd-background-color: #fff;
+}
+
+@mixin pico-theme-dark {
+  --pico-background-color: #181c25;
+  --pico-code-kbd-color: #fff;
+  --pico-code-kbd-background-color: #333;
+}
+
+[data-theme=dark] {
+  @include pico-theme-dark;
+}
+
+@media only screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    @include pico-theme-dark;
+  }
+}
+
+// Override the tooltip component
+[data-tooltip]:not(a, button, input) {
+  border-bottom: none;
+  cursor: pointer;
+}
+
+nav {
+  > ul:first-child {
+    > li:first-child * {
+      color: var(--pico-contrast);
+    }
+
+    > li:not(:last-child):after {
+      display: inline-block;
+      width: 0;
+      vertical-align: baseline;
+      content: "/";
+      padding-left: 10px;
+    }
+
+    @media (max-width: map.get(map.get($breakpoints, "sm"), "breakpoint")) {
+      > li:not(:first-child) {
+        display: none;
+      }
+
+      > li:not(:last-child):after {
+        display: none;
+      }
+    }
+  }
+}
+
+@keyframes progress-stripes {
+  0% {
+    background-position: 0 0
+  }
+  to {
+    background-position: calc(2.5rem) 0
+  }
+}
+
+$progress-height: 2rem;
+
+.progress-root {
+  display: flex;
+  height: $progress-height;
+  overflow: hidden;
+  border-radius: var(--pico-border-radius);
+  background-color: $slate-800;
+
+  .progress-section.striped {
+    //animation: progress-stripes 1s linear infinite;
+    background-image: linear-gradient(
+                    45deg,
+                    rgba(255, 255, 255, .15) 25%,
+                    transparent 25%,
+                    transparent 50%,
+                    rgba(255, 255, 255, .15) 50%,
+                    rgba(255, 255, 255, .15) 75%,
+                    transparent 75%,
+                    transparent);
+    background-size: calc(1.25rem) calc(1.25rem);
+    background-repeat: repeat;
+  }
+
+  &.code {
+    .progress-section:nth-child(1) {
+      background-color: $jade-400;
+    }
+
+    .progress-section:nth-child(2) {
+      background-color: $jade-500;
+    }
+
+    .progress-section:nth-child(3) {
+      background-color: $slate-800;
+    }
+  }
+
+  &.data {
+    .progress-section:nth-child(1) {
+      background-color: $azure-400;
+    }
+
+    .progress-section:nth-child(2) {
+      background-color: $azure-500;
+    }
+  }
+
+  &.overlay {
+    position: relative;
+    top: $progress-height * -1;
+    margin-bottom: calc($progress-height * -1 + var(--pico-spacing));
+    overflow: visible;
+    background: none;
+
+    .progress-section {
+      background: none;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-root .progress-section.striped {
+    animation: none;
+  }
+}
+
+$unit-size: 0.75rem;
+
+.units-root {
+  display: flex;
+  flex-flow: row wrap;
+  margin-bottom: var(--pico-spacing);
+
+  .unit {
+    width: $unit-size;
+    height: $unit-size;
+    background-color: #333;
+
+    &:hover {
+      border: 1px solid #fff;
+    }
+  }
+}
+
+.muted {
+  color: var(--pico-muted-color);
+
+  a {
+    color: var(--pico-muted-color);
+  }
+}
+
+#graph {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  margin-bottom: var(--pico-spacing);
+  touch-action: none;
+  // Accessed via JS
+  --font-weight: 400;
+  --font-size: 1rem;
+  --font-family: var(--pico-font-family);
+}

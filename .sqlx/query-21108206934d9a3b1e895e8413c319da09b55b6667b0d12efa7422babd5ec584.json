@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM reports JOIN projects ON reports.project_id = projects.id\n                WHERE projects.owner = ? COLLATE NOCASE AND projects.repo = ? COLLATE NOCASE\n                      AND git_commit = ? COLLATE NOCASE\n            ) AS \"exists!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "exists!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "21108206934d9a3b1e895e8413c319da09b55b6667b0d12efa7422babd5ec584"
+}

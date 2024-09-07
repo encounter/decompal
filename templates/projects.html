@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="darkreader-lock">
+    <meta name="description" content="Decompilation progress reports">
+    <link rel="stylesheet" href="/css/main.min.css">
+    <title>Projects • decomp.dev</title>
+</head>
+<body>
+<header>
+    <nav data-hx-boost="true">
+        <ul>
+            <li>
+                <a href="https://decomp.dev">
+                    <strong>decomp.dev</strong>
+                </a>
+            </li>
+            <li>
+                <a href="/">Projects</a>
+            </li>
+        </ul>
+        <ul>
+            <li>
+                <a href="https://ghidra.decomp.dev">Ghidra</a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main>
+    {% for project in projects %}
+    {% set measures = project.measures %}
+    <article class="project">
+        <h3>
+            <a href="/{{ project.owner }}/{{ project.repo }}" data-hx-boost="true">
+                {{ project.name }}
+            </a>
+        </h3>
+        <h6>
+            {{ measures.matched_code_percent | round(2) }}% decompiled |
+            {{ measures.complete_code_percent | round(2) }}% fully linked
+        </h6>
+        <div class="progress-root code">
+            <div class="progress-section" style="width: {{ measures.complete_code_percent }}%"></div>
+            <div class="progress-section striped"
+                 style="width: {{ measures.matched_code_percent - measures.complete_code_percent }}%"></div>
+            <div class="progress-section striped"
+                 style="width: {{ measures.fuzzy_match_percent - measures.matched_code_percent }}%"></div>
+        </div>
+        <!-- Invisible overlay for tooltips -->
+        <div class="progress-root overlay">
+            <div class="progress-section" style="width: {{ measures.complete_code_percent }}%"
+                 data-tooltip="{{ measures.complete_code_percent | round(2) }}% fully linked"></div>
+            <div class="progress-section"
+                 style="width: {{ measures.matched_code_percent - measures.complete_code_percent }}%"
+                 data-tooltip="{{ measures.matched_code_percent | round(2) }}% perfect match"></div>
+            <div class="progress-section"
+                 style="width: {{ measures.fuzzy_match_percent - measures.matched_code_percent }}%"
+                 data-tooltip="{{ measures.fuzzy_match_percent | round(2) }}% fuzzy match"></div>
+        </div>
+        <small class="muted">
+            <span title="{{ project.timestamp | date }}">Last updated: {{ project.timestamp | timeago }}</span>
+            in commit <a href="https://github.com/{{ project.owner }}/{{ project.repo }}/commit/{{ project.commit }}"
+                         target="_blank">{{ project.commit[:7] }}</a>
+        </small>
+    </article>
+    {% endfor %}
+</main>
+<footer>
+    <small class="muted">Generated in [[time]] 🦀</small>
+</footer>
+</body>
+</html>

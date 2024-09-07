@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg viewBox="0 0 {{ w }} {{ h }}" xmlns="http://www.w3.org/2000/svg">
+    <style>.unit { stroke: #000; stroke-width: 1; }</style>
+    {% for unit in units %}
+    <rect class="unit" width="{{ unit.w }}%" height="{{ unit.h }}%" x="{{ unit.x }}%" y="{{ unit.y }}%" fill="{{ unit.color }}" />
+    {% endfor %}
+</svg>

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO reports (project_id, version, git_commit, timestamp, data)\n            VALUES (?, ?, ?, ?, ?)\n            ON CONFLICT (project_id, version COLLATE NOCASE, git_commit COLLATE NOCASE) DO UPDATE\n            SET timestamp = EXCLUDED.timestamp\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "56c994f1c82f796c9924b571d5442a2694c3a1dbf469c88dfb8df8f283e18a3d"
+}

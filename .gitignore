@@ -1,4 +1,6 @@
-/tmp
+/node_modules
+/target
 /.idea
-objdiff-*
+db.sqlite*
 config.yml
+.env

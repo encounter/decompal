@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT ru.id AS \"id!\", ru.data, rru.unit_index\n            FROM report_report_units rru JOIN report_units ru ON rru.report_unit_id = ru.id\n            WHERE rru.report_id = ?\n            ORDER BY rru.unit_index\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "data",
+        "ordinal": 1,
+        "type_info": "Blob"
+      },
+      {
+        "name": "unit_index",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d2268044470d7a0c539ccbae97e55256cbeb4d2c46e38521fe7c553fc02c861f"
+}

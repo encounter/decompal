@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT git_commit, timestamp, version\n                FROM reports\n                WHERE project_id = ? AND timestamp = (\n                    SELECT MAX(timestamp)\n                    FROM reports\n                    WHERE project_id = ?\n                )\n                ORDER BY version\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "git_commit",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "timestamp",
+        "ordinal": 1,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "version",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4f3b7670e663abfba2a3c1b41f11293425d9701e3583fb1ce5851092dae89f10"
+}

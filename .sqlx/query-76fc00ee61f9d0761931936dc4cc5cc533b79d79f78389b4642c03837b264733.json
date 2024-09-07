@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                projects.id AS \"project_id!\",\n                owner AS \"owner!\",\n                repo AS \"repo!\",\n                name,\n                short_name,\n                default_version,\n                git_commit AS \"git_commit!\",\n                MAX(timestamp) AS \"timestamp: chrono::NaiveDateTime\",\n                JSON_GROUP_ARRAY(version ORDER BY version) AS versions\n            FROM projects JOIN reports ON projects.id = reports.project_id\n            WHERE timestamp = (\n                SELECT MAX(timestamp)\n                FROM reports\n                WHERE project_id = projects.id\n            )\n            GROUP BY projects.id\n            ORDER BY MAX(timestamp) DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "project_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "owner!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "repo!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "short_name",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "default_version",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "git_commit!",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "timestamp: chrono::NaiveDateTime",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "versions",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "76fc00ee61f9d0761931936dc4cc5cc533b79d79f78389b4642c03837b264733"
+}
