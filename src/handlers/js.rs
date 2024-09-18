@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, path::PathBuf};
+use std::ffi::OsStr;
 
 use anyhow::{anyhow, Result};
 use axum::{
@@ -16,10 +16,10 @@ use oxc::{
     transformer::{EnvOptions, Targets, TransformOptions, Transformer},
 };
 
-use crate::handlers::AppError;
+use crate::{handlers::AppError, util::join_normalized};
 
 pub async fn get_js(Path(filename): Path<String>) -> Result<Response, AppError> {
-    let mut path = PathBuf::from(format!("js/{filename}"));
+    let mut path = join_normalized("js", &filename);
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     enum ResponseType {
         Js,
@@ -82,7 +82,7 @@ fn transform(
         .into_symbol_table_and_scope_tree();
 
     let transform_options = TransformOptions::from_preset_env(&EnvOptions {
-        targets: Targets::from_query("es2020"),
+        targets: Targets::from_query("defaults"),
         ..EnvOptions::default()
     })
     .map_err(|v| anyhow!("{}", v.first().unwrap()))?;

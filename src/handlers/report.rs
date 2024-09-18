@@ -2,7 +2,7 @@ use std::{iter, str::FromStr, time::Instant};
 
 use anyhow::{Context, Result};
 use axum::{
-    extract::{ Path, Query, State},
+    extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode, Uri},
     response::{Html, IntoResponse, Response},
     Json,

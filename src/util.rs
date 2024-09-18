@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use url::Url;
 
 pub trait UrlExt {
@@ -47,4 +49,11 @@ impl UrlExt for Url {
 
     #[inline]
     fn path_and_query(&self) -> &str { &self[url::Position::BeforePath..] }
+}
+
+/// Join two paths, only including the normal components.
+pub fn join_normalized(base: impl AsRef<Path>, path: impl AsRef<Path>) -> PathBuf {
+    let mut out = base.as_ref().to_path_buf();
+    out.extend(path.as_ref().components().filter(|v| matches!(v, std::path::Component::Normal(_))));
+    out
 }

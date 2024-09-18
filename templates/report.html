@@ -7,11 +7,11 @@
     <meta name="darkreader-lock">
     <meta name="description" content="Decompilation progress report for {{ project_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %}">
     <title>{{ project_short_name }}{% if current_category.id != "all" %} ({{ current_category.name }}){% endif %} • Progress Report</title>
-    <link rel="stylesheet" href="/css/main.min.css?3">
+    <link rel="stylesheet" href="/css/main.min.css?4">
     <script src="https://unpkg.com/htmx.org@2.0.2"
             integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
             crossorigin="anonymous"></script>
-    <script src="/js/graph.min.js?5"></script>
+    <script src="/js/graph.min.js?6"></script>
     <meta property="og:title" content="{{ project_short_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %} is {{ measures.matched_code_percent | round(2) }}% decompiled">
     <meta property="og:description" content="Decompilation progress report for {{ project_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %}">
     <meta property="og:image" content="{{ image_url | safe }}">

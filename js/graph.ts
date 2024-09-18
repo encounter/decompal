@@ -28,6 +28,7 @@ const drawTooltip = (ctx: CanvasRenderingContext2D, unit: Unit, width: number, h
     const fontSize = style.getPropertyValue('--font-size') || '16px';
     const fontFamily = style.getPropertyValue('--font-family') || 'sans-serif';
     const tooltipBackground = style.getPropertyValue('--tooltip-background') || "#fff"
+    const tooltipColor = style.getPropertyValue('--tooltip-color') || "#000"
     ctx.font = `${fontWeight} ${fontSize} ${fontFamily}`;
     ctx.textBaseline = "middle";
 
@@ -65,18 +66,34 @@ const drawTooltip = (ctx: CanvasRenderingContext2D, unit: Unit, width: number, h
         ctx.lineTo(ax - margin, y - margin);
     }
     ctx.fill();
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = tooltipColor;
     ctx.fillText(text, bx + PADDING_W, by + bh / 2);
 };
 
 let hovered = null;
 let dirty = false;
 let isTouch = false;
+let cachedCanvas: HTMLCanvasElement = null;
+
+const setup = (ctx: CanvasRenderingContext2D, ratio: number, width: number, height: number) => {
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0); // Scale to device pixel ratio
+    ctx.clearRect(0, 0, width, height);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#000";
+}
+
+const drawUnits = (ctx: CanvasRenderingContext2D, units: Unit[], width: number, height: number) => {
+    for (const unit of units) {
+        const {x, y, w, h} = unitBounds(unit, width, height);
+        ctx.fillStyle = unit.color;
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.fill();
+        ctx.stroke();
+    }
+}
 
 const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
-    if (!canvas.getContext) {
-        return;
-    }
     const {width, height} = canvas.getBoundingClientRect();
     const ratio = window.devicePixelRatio;
     const renderWidth = width * ratio;
@@ -91,19 +108,25 @@ const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
         canvas.width = renderWidth;
         canvas.height = renderHeight;
     }
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0); // Scale to device pixel ratio
-    ctx.clearRect(0, 0, width, height);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "#000";
-    for (const unit of units) {
-        const {x, y, w, h} = unitBounds(unit, width, height);
-        ctx.fillStyle = unit.color;
-        ctx.beginPath();
-        ctx.rect(x, y, w, h);
-        ctx.fill();
-        ctx.stroke();
+    // Update cached canvas if needed
+    if (cachedCanvas.width !== renderWidth || cachedCanvas.height !== renderHeight) {
+        cachedCanvas.width = renderWidth;
+        cachedCanvas.height = renderHeight;
+        const cachedCtx = cachedCanvas.getContext("2d");
+        if (!cachedCtx) {
+            return;
+        }
+        setup(cachedCtx, ratio, width, height);
+        drawUnits(cachedCtx, units, width, height);
     }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+        return;
+    }
+    // Use 1:1 scale for rendering cached canvas
+    setup(ctx, 1, renderWidth, renderHeight);
+    ctx.drawImage(cachedCanvas, 0, 0);
+    ctx.scale(ratio, ratio); // Restore device scale
     if (hovered) {
         const {x, y, w, h} = unitBounds(hovered, width, height);
         ctx.lineWidth = 2;
@@ -115,8 +138,11 @@ const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
 
 const drawGraph = (id: string, units: Unit[]) => {
     const canvas = document.getElementById(id) as HTMLCanvasElement;
-    if (!canvas) {
+    if (!canvas || !canvas.getContext) {
         return;
+    }
+    if (!cachedCanvas) {
+        cachedCanvas = document.createElement("canvas");
     }
     const queueDraw = () => requestAnimationFrame(() => draw(canvas, units));
     const resizeObserver = new ResizeObserver(queueDraw);

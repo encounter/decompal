@@ -61,7 +61,7 @@
                  data-tooltip="{{ measures.fuzzy_match_percent | round(2) }}% fuzzy match"></div>
         </div>
         <small class="muted">
-            <span title="{{ project.timestamp | date }}">Last updated: {{ project.timestamp | timeago }}</span>
+            <span title="{{ project.timestamp | date }}">Updated {{ project.timestamp | timeago }}</span>
             in commit <a href="https://github.com/{{ project.owner }}/{{ project.repo }}/commit/{{ project.commit }}"
                          target="_blank">{{ project.commit[:7] }}</a>
         </small>

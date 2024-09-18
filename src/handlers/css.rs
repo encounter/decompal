@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, path::PathBuf};
+use std::ffi::OsStr;
 
 use anyhow::anyhow;
 use axum::{
@@ -8,9 +8,10 @@ use axum::{
 };
 
 use super::AppError;
+use crate::util::join_normalized;
 
 pub async fn get_css(Path(filename): Path<String>) -> Result<Response, AppError> {
-    let mut path = PathBuf::from(format!("css/{filename}"));
+    let mut path = join_normalized("css", &filename);
     if path.extension() != Some(OsStr::new("css")) {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     }

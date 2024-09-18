@@ -97,12 +97,16 @@ $breakpoints: (
 :root:not([data-theme=dark]) {
   --pico-code-kbd-color: #000;
   --pico-code-kbd-background-color: #fff;
+  --progress-background-color: #{$slate-100};
+  --progress-stripe-color: rgba(0, 0, 0, 0.15);
 }
 
 @mixin pico-theme-dark {
   --pico-background-color: #181c25;
   --pico-code-kbd-color: #fff;
   --pico-code-kbd-background-color: #333;
+  --progress-background-color: #{$slate-800};
+  --progress-stripe-color: rgba(255, 255, 255, 0.15);
 }
 
 [data-theme=dark] {
@@ -163,17 +167,17 @@ $progress-height: 2rem;
   height: $progress-height;
   overflow: hidden;
   border-radius: var(--pico-border-radius);
-  background-color: $slate-800;
+  background-color: var(--progress-background-color);
 
   .progress-section.striped {
     //animation: progress-stripes 1s linear infinite;
     background-image: linear-gradient(
                     45deg,
-                    rgba(255, 255, 255, .15) 25%,
+                    var(--progress-stripe-color) 25%,
                     transparent 25%,
                     transparent 50%,
-                    rgba(255, 255, 255, .15) 50%,
-                    rgba(255, 255, 255, .15) 75%,
+                    var(--progress-stripe-color) 50%,
+                    var(--progress-stripe-color) 75%,
                     transparent 75%,
                     transparent);
     background-size: calc(1.25rem) calc(1.25rem);
@@ -190,7 +194,7 @@ $progress-height: 2rem;
     }
 
     .progress-section:nth-child(3) {
-      background-color: $slate-800;
+      background-color: transparent;
     }
   }
 
@@ -259,4 +263,5 @@ $unit-size: 0.75rem;
   --font-size: 0.875rem;
   --font-family: var(--pico-font-family);
   --tooltip-background: var(--pico-tooltip-background-color);
+  --tooltip-color: var(--pico-tooltip-color);
 }
