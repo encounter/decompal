@@ -13,9 +13,8 @@ use objdiff_core::bindings::report::{Measures, ReportCategory};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use super::{graph::layout_units, parse_accept, AppError, FullUri, Protobuf, PROTOBUF};
+use super::{badge, graph, parse_accept, AppError, FullUri, Protobuf, PROTOBUF};
 use crate::{
-    handlers::graph::{render_image, render_svg, unit_color},
     models::{Project, ProjectInfo, ReportFile},
     templates::render,
     util::UrlExt,
@@ -35,9 +34,12 @@ const DEFAULT_IMAGE_HEIGHT: u32 = 475;
 
 #[derive(Deserialize)]
 pub struct ReportQuery {
+    mode: Option<String>,
     category: Option<String>,
     w: Option<u32>,
     h: Option<u32>,
+    #[serde(flatten)]
+    shield: badge::ShieldParams,
 }
 
 impl ReportQuery {
@@ -203,17 +205,36 @@ pub async fn get_report(
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };
 
-    let (w, h) = query.size();
-    let (measures, current_category, units) = apply_category(&report, &query)?;
+    if let Some(mode) = query.mode.as_deref() {
+        match mode.to_ascii_lowercase().as_str() {
+            "shield" => mode_shield(report, query, headers, ext),
+            "report" => mode_report(report, project_info, &state, uri, query, headers, start, ext),
+            _ => Err(AppError::Status(StatusCode::BAD_REQUEST)),
+        }
+    } else {
+        mode_report(report, project_info, &state, uri, query, headers, start, ext)
+    }
+}
 
+fn mode_report(
+    report: ReportFile,
+    project_info: ProjectInfo,
+    state: &AppState,
+    uri: Uri,
+    query: ReportQuery,
+    headers: HeaderMap,
+    start: Instant,
+    ext: Option<String>,
+) -> Result<Response, AppError> {
+    let (measures, current_category, units) = apply_category(&report, &query)?;
     let acceptable = if let Some(ext) = ext {
         vec![match ext.to_ascii_lowercase().as_str() {
             "json" => mime::APPLICATION_JSON,
-            "binpb" | "proto" => Mime::from_str("application/x-protobuf").unwrap(),
+            "binpb" | "proto" => Mime::from_str("application/x-protobuf")?,
             "svg" => mime::IMAGE_SVG,
             _ => {
                 if let Some(format) = ImageFormat::from_extension(ext) {
-                    Mime::from_str(format.to_mime_type()).unwrap()
+                    Mime::from_str(format.to_mime_type())?
                 } else {
                     return Err(AppError::Status(StatusCode::NOT_ACCEPTABLE));
                 }
@@ -246,7 +267,8 @@ pub async fn get_report(
         } else if mime.type_() == mime::APPLICATION && mime.subtype() == PROTOBUF {
             return Ok(Protobuf(report.report).into_response());
         } else if mime.type_() == mime::IMAGE && mime.subtype() == mime::SVG {
-            let svg = render_svg(&units, w, h, &state)?;
+            let (w, h) = query.size();
+            let svg = graph::render_svg(&units, w, h, &state)?;
             return Ok(([(header::CONTENT_TYPE, mime::IMAGE_SVG.as_ref())], svg).into_response());
         } else if mime.type_() == mime::IMAGE {
             let format = if mime.subtype() == mime::STAR {
@@ -256,7 +278,59 @@ pub async fn get_report(
                 ImageFormat::from_mime_type(mime.essence_str())
                     .ok_or_else(|| AppError::Status(StatusCode::NOT_ACCEPTABLE))?
             };
-            let data = render_image(&units, w, h, &state, format)?;
+            let (w, h) = query.size();
+            let data = graph::render_image(&units, w, h, &state, format)?;
+            return Ok(([(header::CONTENT_TYPE, format.to_mime_type())], data).into_response());
+        }
+    }
+    Err(AppError::Status(StatusCode::NOT_ACCEPTABLE))
+}
+
+fn mode_shield(
+    report: ReportFile,
+    query: ReportQuery,
+    headers: HeaderMap,
+    ext: Option<String>,
+) -> Result<Response, AppError> {
+    let (measures, current_category, _units) = apply_category(&report, &query)?;
+    let acceptable = if let Some(ext) = ext {
+        vec![match ext.to_ascii_lowercase().as_str() {
+            "json" => mime::APPLICATION_JSON,
+            "svg" => mime::IMAGE_SVG,
+            _ => {
+                if let Some(format) = ImageFormat::from_extension(ext) {
+                    Mime::from_str(format.to_mime_type())?
+                } else {
+                    return Err(AppError::Status(StatusCode::NOT_ACCEPTABLE));
+                }
+            }
+        }]
+    } else {
+        if !headers.contains_key(header::ACCEPT) {
+            return Ok(Json(report.report).into_response());
+        }
+        parse_accept(&headers)
+    };
+    for mime in acceptable {
+        if (mime.type_() == mime::STAR && mime.subtype() == mime::STAR)
+            || (mime.type_() == mime::IMAGE && mime.subtype() == mime::SVG)
+            || (mime.type_() == mime::TEXT && mime.subtype() == mime::HTML)
+        {
+            let data = badge::render_svg(&report, measures, current_category, &query.shield)?;
+            return Ok(([(header::CONTENT_TYPE, mime::IMAGE_SVG.as_ref())], data).into_response());
+        } else if mime.type_() == mime::APPLICATION && mime.subtype() == mime::JSON {
+            let data = badge::render(&report, measures, current_category, &query.shield)?;
+            return Ok(Json(data).into_response());
+        } else if mime.type_() == mime::IMAGE {
+            let format = if mime.subtype() == mime::STAR {
+                // Default to PNG
+                ImageFormat::Png
+            } else {
+                ImageFormat::from_mime_type(mime.essence_str())
+                    .ok_or_else(|| AppError::Status(StatusCode::NOT_ACCEPTABLE))?
+            };
+            let data =
+                badge::render_image(&report, measures, current_category, &query.shield, format)?;
             return Ok(([(header::CONTENT_TYPE, format.to_mime_type())], data).into_response());
         }
     }
@@ -296,7 +370,7 @@ fn apply_category<'a>(
     }
     let (w, h) = query.size();
     let aspect = w as f32 / h as f32;
-    let units = layout_units(&report.report, w, h, |item| {
+    let units = graph::layout_units(&report.report, w, h, |item| {
         if let Some(category_id) = &category_id_filter {
             item.metadata
                 .as_ref()
@@ -321,7 +395,7 @@ fn apply_category<'a>(
         ReportTemplateUnit {
             name: &unit.name,
             fuzzy_match_percent: match_percent,
-            color: unit_color(match_percent),
+            color: graph::unit_color(match_percent),
             x: bounds.x,
             y: bounds.y,
             w: bounds.w,

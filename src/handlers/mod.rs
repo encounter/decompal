@@ -14,6 +14,7 @@ use prost::Message;
 
 use crate::AppState;
 
+mod badge;
 mod css;
 mod graph;
 mod js;
