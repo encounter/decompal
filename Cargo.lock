@@ -2396,9 +2396,9 @@ dependencies = [
 
 [[package]]
 name = "objdiff-core"
-version = "2.0.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5a4a551c6f2c06663c06c4b8f5829e7ed4e12c15e10f644d76021f2287bf5a8"
+checksum = "e9c26c115905f9e65e7e63385680912aaf61963494ede73727cd73c04c78d3d3"
 dependencies = [
  "anyhow",
  "byteorder",

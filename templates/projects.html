@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="light dark">
     <meta name="darkreader-lock">
     <meta name="description" content="Decompilation progress reports">
-    <link rel="stylesheet" href="/css/main.min.css">
+    <link rel="stylesheet" href="/css/main.min.css?5">
     <title>Projects • decomp.dev</title>
 </head>
 <body>
@@ -21,6 +21,16 @@
             <li>
                 <a href="/">Projects</a>
             </li>
+            <li>
+                <details class="dropdown" data-hx-boost="true">
+                    <summary>{{ current_sort.name }}</summary>
+                    <ul>
+                        {% for sort in sort_options %}
+                        <li><a href="?sort={{ sort.key }}">{{ sort.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            </li>
         </ul>
         <ul>
             <li>
@@ -33,11 +43,17 @@
     {% for project in projects %}
     {% set measures = project.measures %}
     <article class="project">
-        <h3>
-            <a href="/{{ project.owner }}/{{ project.repo }}" data-hx-boost="true">
-                {{ project.name }}
-            </a>
-        </h3>
+        <div class="project-header">
+            <h3 class="project-title">
+                <a href="/{{ project.owner }}/{{ project.repo }}" data-hx-boost="true">
+                    {{ project.name }}
+                </a>
+            </h3>
+            {% if project.platform %}
+            <img class="platform-icon" src="/assets/platforms/{{ project.platform }}.svg"
+                 alt="{{ project.platform }}" width="24" height="24">
+            {% endif %}
+        </div>
         <h6>
             {{ measures.matched_code_percent | round(2) }}% decompiled |
             {{ measures.complete_code_percent | round(2) }}% fully linked
@@ -68,8 +84,6 @@
     </article>
     {% endfor %}
 </main>
-<footer>
-    <small class="muted">Generated in [[time]] 🦀</small>
-</footer>
+{% include 'fragments/footer.html' %}
 </body>
 </html>

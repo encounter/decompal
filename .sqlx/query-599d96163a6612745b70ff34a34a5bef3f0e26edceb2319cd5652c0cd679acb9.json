@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                reports.id as \"report_id!\",\n                git_commit,\n                timestamp,\n                version,\n                data,\n                projects.id as \"project_id!\",\n                owner,\n                repo,\n                name,\n                short_name,\n                default_version\n            FROM reports JOIN projects ON reports.project_id = projects.id\n            WHERE projects.owner = ? COLLATE NOCASE AND projects.repo = ? COLLATE NOCASE\n                  AND version = ? COLLATE NOCASE AND git_commit = ? COLLATE NOCASE\n            ",
+  "query": "\n            SELECT\n                reports.id as \"report_id!\",\n                git_commit,\n                timestamp,\n                version,\n                data,\n                projects.id as \"project_id!\",\n                owner,\n                repo,\n                name,\n                short_name,\n                default_version,\n                platform\n            FROM reports JOIN projects ON reports.project_id = projects.id\n            WHERE projects.owner = ? COLLATE NOCASE AND projects.repo = ? COLLATE NOCASE\n                  AND version = ? COLLATE NOCASE AND git_commit = ? COLLATE NOCASE\n            ",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,11 @@
         "name": "default_version",
         "ordinal": 10,
         "type_info": "Text"
+      },
+      {
+        "name": "platform",
+        "ordinal": 11,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -73,8 +78,9 @@
       false,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "d38ee2d117fd8d6e0628c790c138ef596317748a42165c899b81ab63b84ff819"
+  "hash": "599d96163a6612745b70ff34a34a5bef3f0e26edceb2319cd5652c0cd679acb9"
 }

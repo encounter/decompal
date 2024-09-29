@@ -48,6 +48,7 @@ pub async fn run(state: &mut AppState, owner: &str, repo: &str, stop_run_id: u64
         name: None,
         short_name: None,
         default_version: None,
+        platform: None,
     });
 
     let mut runs = vec![];
@@ -285,14 +286,14 @@ async fn download_artifact(
             file.read_to_end(&mut contents)?;
             let mut report = Report::parse(&contents)?;
             report.migrate()?;
-            // Split combined reports into individual reports TODO
-            // if version.eq_ignore_ascii_case("combined") {
-            //     return Ok(report
-            //         .split()
-            //         .into_iter()
-            //         .map(|(version, report)| (version, Arc::new(report)))
-            //         .collect());
-            // }
+            // Split combined reports into individual reports
+            if version.eq_ignore_ascii_case("combined") {
+                return Ok(report
+                    .split()
+                    .into_iter()
+                    .map(|(version, report)| (version, Arc::new(report)))
+                    .collect());
+            }
             return Ok(vec![(version, Arc::new(report))]);
         }
     }

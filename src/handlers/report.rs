@@ -13,7 +13,7 @@ use objdiff_core::bindings::report::{Measures, ReportCategory};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use super::{badge, graph, parse_accept, AppError, FullUri, Protobuf, PROTOBUF};
+use super::{badge, treemap, parse_accept, AppError, FullUri, Protobuf, PROTOBUF};
 use crate::{
     models::{Project, ProjectInfo, ReportFile},
     templates::render,
@@ -33,6 +33,7 @@ const DEFAULT_IMAGE_WIDTH: u32 = 950;
 const DEFAULT_IMAGE_HEIGHT: u32 = 475;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReportQuery {
     mode: Option<String>,
     category: Option<String>,
@@ -268,7 +269,7 @@ fn mode_report(
             return Ok(Protobuf(report.report).into_response());
         } else if mime.type_() == mime::IMAGE && mime.subtype() == mime::SVG {
             let (w, h) = query.size();
-            let svg = graph::render_svg(&units, w, h, &state)?;
+            let svg = treemap::render_svg(&units, w, h, &state)?;
             return Ok(([(header::CONTENT_TYPE, mime::IMAGE_SVG.as_ref())], svg).into_response());
         } else if mime.type_() == mime::IMAGE {
             let format = if mime.subtype() == mime::STAR {
@@ -279,7 +280,7 @@ fn mode_report(
                     .ok_or_else(|| AppError::Status(StatusCode::NOT_ACCEPTABLE))?
             };
             let (w, h) = query.size();
-            let data = graph::render_image(&units, w, h, &state, format)?;
+            let data = treemap::render_image(&units, w, h, &state, format)?;
             return Ok(([(header::CONTENT_TYPE, format.to_mime_type())], data).into_response());
         }
     }
@@ -370,7 +371,7 @@ fn apply_category<'a>(
     }
     let (w, h) = query.size();
     let aspect = w as f32 / h as f32;
-    let units = graph::layout_units(&report.report, w, h, |item| {
+    let units = treemap::layout_units(&report.report, w, h, |item| {
         if let Some(category_id) = &category_id_filter {
             item.metadata
                 .as_ref()
@@ -395,7 +396,7 @@ fn apply_category<'a>(
         ReportTemplateUnit {
             name: &unit.name,
             fuzzy_match_percent: match_percent,
-            color: graph::unit_color(match_percent),
+            color: treemap::unit_color(match_percent),
             x: bounds.x,
             y: bounds.y,
             w: bounds.w,

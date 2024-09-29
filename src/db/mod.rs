@@ -165,7 +165,8 @@ impl Database {
                 repo,
                 name,
                 short_name,
-                default_version
+                default_version,
+                platform
             FROM reports JOIN projects ON reports.project_id = projects.id
             WHERE projects.owner = ? COLLATE NOCASE AND projects.repo = ? COLLATE NOCASE
                   AND version = ? COLLATE NOCASE AND git_commit = ? COLLATE NOCASE
@@ -190,6 +191,7 @@ impl Database {
                         name: row.name,
                         short_name: row.short_name,
                         default_version: row.default_version,
+                        platform: row.platform,
                     },
                     Commit { sha: row.git_commit, timestamp: row.timestamp.and_utc() },
                     row.version,
@@ -269,7 +271,7 @@ impl Database {
         let mut conn = self.pool.acquire().await?;
         let project = match sqlx::query!(
             r#"
-            SELECT id AS "id!", owner, repo, name, short_name, default_version
+            SELECT id AS "id!", owner, repo, name, short_name, default_version, platform
             FROM projects
             WHERE owner = ? COLLATE NOCASE AND repo = ? COLLATE NOCASE
             "#,
@@ -286,6 +288,7 @@ impl Database {
                 name: row.name,
                 short_name: row.short_name,
                 default_version: row.default_version,
+                platform: row.platform,
             },
             None => return Ok(None),
         };
@@ -398,6 +401,7 @@ impl Database {
                 name,
                 short_name,
                 default_version,
+                platform,
                 git_commit AS "git_commit!",
                 MAX(timestamp) AS "timestamp: chrono::NaiveDateTime",
                 JSON_GROUP_ARRAY(version ORDER BY version) AS versions
@@ -422,6 +426,7 @@ impl Database {
                 name: row.name,
                 short_name: row.short_name,
                 default_version: row.default_version,
+                platform: row.platform,
             },
             commit: Commit { sha: row.git_commit, timestamp: row.timestamp.and_utc() },
             report_versions: serde_json::from_str(&row.versions).unwrap_or_default(),

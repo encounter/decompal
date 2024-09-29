@@ -12,6 +12,7 @@ pub struct Project {
     pub name: Option<String>,
     pub short_name: Option<String>,
     pub default_version: Option<String>,
+    pub platform: Option<String>,
 }
 
 impl Project {

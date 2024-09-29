@@ -7,7 +7,7 @@
     <meta name="darkreader-lock">
     <meta name="description" content="Decompilation progress report for {{ project_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %}">
     <title>{{ project_short_name }}{% if current_category.id != "all" %} ({{ current_category.name }}){% endif %} • Progress Report</title>
-    <link rel="stylesheet" href="/css/main.min.css?4">
+    <link rel="stylesheet" href="/css/main.min.css?5">
     <script src="https://unpkg.com/htmx.org@2.0.2"
             integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
             crossorigin="anonymous"></script>
@@ -120,8 +120,6 @@
         {% endif %}
     </div>
 </main>
-<footer>
-    <small class="muted">Generated in [[time]] 🦀</small>
-</footer>
+{% include 'fragments/footer.html' %}
 </body>
 </html>

@@ -2,12 +2,13 @@ use std::{sync::Arc, time::Instant};
 
 use anyhow::anyhow;
 use axum::{
-    extract::State,
+    extract::{Query, State},
+    http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
 use chrono::{DateTime, Utc};
 use objdiff_core::bindings::report::Measures;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::{sync::Semaphore, task::JoinSet};
 
 use super::AppError;
@@ -16,6 +17,8 @@ use crate::{templates::render, AppState};
 #[derive(Serialize)]
 struct ProjectsTemplateContext {
     projects: Vec<ProjectInfoContext>,
+    sort_options: &'static [SortOption],
+    current_sort: SortOption,
 }
 
 #[derive(Serialize)]
@@ -29,9 +32,30 @@ struct ProjectInfoContext {
     commit: String,
     timestamp: DateTime<Utc>,
     measures: Measures,
+    platform: Option<String>,
 }
 
-pub async fn get_projects(State(state): State<AppState>) -> Result<Response, AppError> {
+#[derive(Deserialize)]
+pub struct ProjectsQuery {
+    sort: Option<String>,
+}
+
+#[derive(Serialize, Copy, Clone)]
+struct SortOption {
+    key: &'static str,
+    name: &'static str,
+}
+
+const SORT_OPTIONS: &[SortOption] = &[
+    SortOption { key: "updated", name: "Last updated" },
+    SortOption { key: "matched_code", name: "Matched Code" },
+    SortOption { key: "name", name: "Name" },
+];
+
+pub async fn get_projects(
+    State(state): State<AppState>,
+    Query(query): Query<ProjectsQuery>,
+) -> Result<Response, AppError> {
     let start = Instant::now();
     let projects = state.db.get_projects().await?;
     let mut out = projects
@@ -46,6 +70,7 @@ pub async fn get_projects(State(state): State<AppState>) -> Result<Response, App
             commit: p.commit.sha.clone(),
             timestamp: p.commit.timestamp,
             measures: Default::default(),
+            platform: p.project.platform.clone(),
         })
         .collect::<Vec<_>>();
 
@@ -86,8 +111,29 @@ pub async fn get_projects(State(state): State<AppState>) -> Result<Response, App
         }
     }
 
-    let mut rendered =
-        render(&state.templates, "projects.html", ProjectsTemplateContext { projects: out })?;
+    let current_sort_key = query.sort.as_deref().unwrap_or("updated");
+    let current_sort = SORT_OPTIONS
+        .iter()
+        .find(|s| s.key.eq_ignore_ascii_case(current_sort_key))
+        .copied()
+        .ok_or(AppError::Status(StatusCode::BAD_REQUEST))?;
+    match current_sort.key {
+        "name" => out.sort_by(|a, b| a.name.cmp(&b.name)),
+        "updated" => out.sort_by(|a, b| b.timestamp.cmp(&a.timestamp)),
+        "matched_code" => out.sort_by(|a, b| {
+            b.measures
+                .matched_code_percent
+                .partial_cmp(&a.measures.matched_code_percent)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }),
+        _ => return Err(AppError::Status(StatusCode::BAD_REQUEST)),
+    }
+
+    let mut rendered = render(&state.templates, "projects.html", ProjectsTemplateContext {
+        projects: out,
+        sort_options: SORT_OPTIONS,
+        current_sort,
+    })?;
     let elapsed = start.elapsed();
     rendered = rendered.replace("[[time]]", &format!("{}ms", elapsed.as_millis()));
     Ok(Html(rendered).into_response())

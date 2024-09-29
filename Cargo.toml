@@ -17,7 +17,7 @@ mime = "0.3"
 minijinja = { version = "2.2", features = ["loader", "json"] }
 minijinja-autoreload = "2.2"
 moka = { version = "0.12", features = ["future"] }
-objdiff-core = { version = "2.0", features = ["bindings"] }
+objdiff-core = { version = "2.2", features = ["bindings"] }
 #objdiff-core = { path = "../objdiff/objdiff-core", features = ["bindings"] }
 octocrab = "0.39"
 oxc = { version = "0.27", features = ["codegen", "minifier", "transformer", "semantic"] }

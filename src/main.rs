@@ -6,6 +6,7 @@ mod handlers;
 mod models;
 mod templates;
 mod util;
+mod svg;
 
 use std::{
     fs::File,

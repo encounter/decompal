@@ -107,6 +107,10 @@ $breakpoints: (
   --pico-code-kbd-background-color: #333;
   --progress-background-color: #{$slate-800};
   --progress-stripe-color: rgba(255, 255, 255, 0.15);
+
+  .platform-icon {
+    filter: invert(1);
+  }
 }
 
 [data-theme=dark] {
@@ -264,4 +268,21 @@ $unit-size: 0.75rem;
   --font-family: var(--pico-font-family);
   --tooltip-background: var(--pico-tooltip-background-color);
   --tooltip-color: var(--pico-tooltip-color);
+}
+
+.project-header {
+  display: flex;
+  align-items: center;
+  gap: var(--pico-spacing);
+  margin-bottom: var(--pico-typography-spacing-vertical);
+
+  .project-title {
+    flex: 1 1 auto;
+    margin-bottom: 0;
+  }
+
+  .platform-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
 }

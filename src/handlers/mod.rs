@@ -16,15 +16,17 @@ use crate::AppState;
 
 mod badge;
 mod css;
-mod graph;
 mod js;
 mod project;
 mod report;
+mod treemap;
+mod assets;
 
 pub fn build_router() -> Router<AppState> {
     Router::new()
         .route("/css/*filename", get(css::get_css))
         .route("/js/*filename", get(js::get_js))
+        .route("/assets/*filename", get(assets::get_asset))
         .route("/", get(project::get_projects))
         .route("/:owner/:repo", get(report::get_report))
         .route("/:owner/:repo/:version", get(report::get_report))

@@ -1,17 +1,12 @@
-use std::io::Cursor;
-
-use anyhow::{anyhow, Context, Result};
-use image::{buffer::ConvertBuffer, ImageFormat, RgbImage, RgbaImage};
+use anyhow::{anyhow, Result};
+use image::ImageFormat;
 use objdiff_core::bindings::report::{Measures, ReportCategory};
-use resvg::{
-    tiny_skia::{PixmapMut, Transform},
-    usvg::{Options, Tree},
-};
 use serde::{Deserialize, Serialize};
 
-use crate::models::ReportFile;
+use crate::{models::ReportFile, svg};
 
 #[derive(Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ShieldParams {
     label: Option<String>,
     label_color: Option<String>,
@@ -21,6 +16,7 @@ pub struct ShieldParams {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ShieldResponse {
     schema_version: u32,
     label: String,
@@ -98,17 +94,5 @@ pub fn render_image(
     format: ImageFormat,
 ) -> Result<Vec<u8>> {
     let svg = render_svg(report, measures, current_category, params)?;
-    let opt = Options::default();
-    let tree = Tree::from_str(&svg, &opt).context("Failed to parse SVG")?;
-    let rect = tree.root().abs_layer_bounding_box();
-    let w = rect.width() as u32;
-    let h = rect.height() as u32;
-    let mut image = RgbaImage::new(w, h);
-    let mut pixmap = PixmapMut::from_bytes(image.as_mut(), w, h)
-        .ok_or_else(|| anyhow!("Failed to create pixmap"))?;
-    resvg::render(&tree, Transform::identity(), &mut pixmap);
-    let mut bytes = Vec::new();
-    let image: RgbImage = image.convert();
-    image.write_to(&mut Cursor::new(&mut bytes), format)?;
-    Ok(bytes)
+    svg::render_image(&svg, format)
 }

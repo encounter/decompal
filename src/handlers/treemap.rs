@@ -1,17 +1,11 @@
-use std::io::Cursor;
-
-use anyhow::{anyhow, Context, Result};
-use image::{buffer::ConvertBuffer, ImageFormat, RgbImage, RgbaImage};
+use anyhow::Result;
+use image::ImageFormat;
 use objdiff_core::bindings::report::{Report, ReportUnit};
 use palette::{Mix, Srgb};
-use resvg::{
-    tiny_skia::{PixmapMut, Transform},
-    usvg::{Options, Tree},
-};
 use serde::Serialize;
 use streemap::Rect;
 
-use crate::{handlers::report::ReportTemplateUnit, templates::render, AppState};
+use crate::{handlers::report::ReportTemplateUnit, svg, templates::render, AppState};
 
 #[derive(Clone)]
 pub struct ReportUnitItem<'report> {
@@ -62,7 +56,7 @@ pub fn layout_units(
 }
 
 #[derive(Serialize)]
-struct GraphTemplateContext<'a> {
+struct TreemapTemplateContext<'a> {
     units: &'a [ReportTemplateUnit<'a>],
     w: u32,
     h: u32,
@@ -74,7 +68,7 @@ pub fn render_svg(
     h: u32,
     state: &AppState,
 ) -> Result<String> {
-    render(&state.templates, "treemap.svg", GraphTemplateContext { units, w, h })
+    render(&state.templates, "treemap.svg", TreemapTemplateContext { units, w, h })
 }
 
 pub fn render_image(
@@ -85,16 +79,7 @@ pub fn render_image(
     format: ImageFormat,
 ) -> Result<Vec<u8>> {
     let svg = render_svg(units, w, h, state)?;
-    let opt = Options::default();
-    let tree = Tree::from_str(&svg, &opt).context("Failed to parse SVG")?;
-    let mut image = RgbaImage::new(w, h);
-    let mut pixmap = PixmapMut::from_bytes(image.as_mut(), w, h)
-        .ok_or_else(|| anyhow!("Failed to create pixmap"))?;
-    resvg::render(&tree, Transform::identity(), &mut pixmap);
-    let mut bytes = Vec::new();
-    let image: RgbImage = image.convert();
-    image.write_to(&mut Cursor::new(&mut bytes), format)?;
-    Ok(bytes)
+    svg::render_image(&svg, format)
 }
 
 fn rgb(r: u8, g: u8, b: u8) -> Srgb {

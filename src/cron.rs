@@ -56,3 +56,15 @@ pub async fn refresh_projects(state: &mut AppState) -> Result<()> {
 // github::run(&mut state, "Rainchus", "marioparty4", 10715620655)
 //     .await
 //     .expect("Failed to run GitHub client");
+// github::run(&mut state, "zeldaret", "ss", 10838420987)
+//     .await
+//     .expect("Failed to run GitHub client");
+// github::run(&mut state, "zeldaret", "oot-gc", 10964802446)
+//     .await
+//     .expect("Failed to run GitHub client");
+// github::run(&mut state, "projectPiki", "pikmin", 11066117942)
+//     .await
+//     .expect("Failed to run GitHub client");
+// github::run(&mut state, "NSMBW-Community","NSMBW-Decomp", 11094989546)
+//     .await
+//     .expect("Failed to run GitHub client");
