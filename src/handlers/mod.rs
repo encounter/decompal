@@ -14,13 +14,13 @@ use prost::Message;
 
 use crate::AppState;
 
+mod assets;
 mod badge;
 mod css;
 mod js;
 mod project;
 mod report;
 mod treemap;
-mod assets;
 
 pub fn build_router() -> Router<AppState> {
     Router::new()

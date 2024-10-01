@@ -4,9 +4,9 @@ mod db;
 mod github;
 mod handlers;
 mod models;
+mod svg;
 mod templates;
 mod util;
-mod svg;
 
 use std::{
     fs::File,

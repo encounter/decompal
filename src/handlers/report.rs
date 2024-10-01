@@ -13,7 +13,7 @@ use objdiff_core::bindings::report::{Measures, ReportCategory};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use super::{badge, treemap, parse_accept, AppError, FullUri, Protobuf, PROTOBUF};
+use super::{badge, parse_accept, treemap, AppError, FullUri, Protobuf, PROTOBUF};
 use crate::{
     models::{Project, ProjectInfo, ReportFile},
     templates::render,
@@ -111,6 +111,8 @@ struct TemplateMeasures {
     complete_code_percent: f32,
     complete_data: u64,
     complete_data_percent: f32,
+    total_units: u32,
+    complete_units: u32,
 }
 
 impl From<&Measures> for TemplateMeasures {
@@ -130,6 +132,8 @@ impl From<&Measures> for TemplateMeasures {
             complete_code_percent,
             complete_data,
             complete_data_percent,
+            total_units,
+            complete_units,
         }: &Measures,
     ) -> Self {
         Self {
@@ -147,6 +151,8 @@ impl From<&Measures> for TemplateMeasures {
             complete_code_percent,
             complete_data,
             complete_data_percent,
+            total_units,
+            complete_units,
         }
     }
 }
@@ -353,6 +359,8 @@ const EMPTY_MEASURES: Measures = Measures {
     complete_code_percent: 0.0,
     complete_data: 0,
     complete_data_percent: 0.0,
+    total_units: 0,
+    complete_units: 0,
 };
 
 fn apply_category<'a>(
