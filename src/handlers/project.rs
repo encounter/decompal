@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -88,7 +88,13 @@ pub async fn get_projects(
             let report = state
                 .db
                 .get_report(&info.project.owner, &info.project.repo, &info.commit.sha, version)
-                .await;
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to fetch report for {}/{} sha {} version {}",
+                        info.project.owner, info.project.repo, info.commit.sha, version
+                    )
+                });
             (info, report)
         });
     }

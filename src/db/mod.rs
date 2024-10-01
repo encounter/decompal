@@ -223,13 +223,13 @@ impl Database {
         {
             let idx = row.unit_index as usize;
             if idx != report.units.len() {
-                bail!("Report unit index mismatch");
+                bail!("Report unit index mismatch: {} but expected {}", idx, report.units.len());
             }
             let key: UnitKey = row.id.as_slice().try_into()?;
             let data = decompress(&row.data).context("Failed to decompress report unit data")?;
             let hash: UnitKey = blake3::hash(data.as_ref()).into();
             if hash != key {
-                bail!("Report unit data hash mismatch");
+                bail!("Report unit data hash mismatch for unit {}", idx);
             }
             let unit = ReportUnit::decode(data.as_ref()).context("Failed to decode report unit")?;
             report.units.push(unit);
