@@ -38,9 +38,9 @@ const drawTooltip = (ctx: CanvasRenderingContext2D, unit: Unit, width: number, h
     const bw = m.actualBoundingBoxRight + m.actualBoundingBoxLeft + PADDING_W * 2;
     const bh = m.fontBoundingBoxAscent + m.fontBoundingBoxDescent + PADDING_H * 2;
     const margin = isTouch ? MARGIN * 2 : MARGIN;
-    let bx = x + (w - bw) / 2 + PADDING_W;
+    let bx = x + (w - bw) / 2;
     let by = y - bh - margin;
-    let invY = false;
+    let ay = y;
     if (bx + bw > width) {
         bx = width - bw;
     }
@@ -48,22 +48,30 @@ const drawTooltip = (ctx: CanvasRenderingContext2D, unit: Unit, width: number, h
         bx = 0;
     }
     if (by < 0) {
+        // Draw below the box
         by = y + h + margin;
-        invY = true;
+        ay = y + h;
+    }
+    if (by + bh > height) {
+        // Draw inside the box
+        by = y + margin;
+        ay = y;
     }
     ctx.fillStyle = tooltipBackground;
     ctx.beginPath();
     ctx.roundRect(bx, by, bw, bh, BORDER_RADIUS);
     // Arrow
     const ax = x + w / 2;
-    if (invY) {
-        ctx.moveTo(ax, y + h);
-        ctx.lineTo(ax + margin, y + h + margin);
-        ctx.lineTo(ax - margin, y + h + margin);
+    if (ay < by) {
+        // Top
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax + margin, by);
+        ctx.lineTo(ax - margin, by);
     } else {
-        ctx.moveTo(ax, y);
-        ctx.lineTo(ax + margin, y - margin);
-        ctx.lineTo(ax - margin, y - margin);
+        // Bottom
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax + margin, by + bh);
+        ctx.lineTo(ax - margin, by + bh);
     }
     ctx.fill();
     ctx.fillStyle = tooltipColor;
@@ -136,7 +144,20 @@ const draw = (canvas: HTMLCanvasElement, units: Unit[]) => {
     }
 };
 
-const drawGraph = (id: string, units: Unit[]) => {
+const findUnit = (canvas: HTMLCanvasElement, units: Unit[], clientX: number, clientY: number): Unit | null => {
+    const {width, height, left, top} = canvas.getBoundingClientRect();
+    const mx = clientX - left;
+    const my = clientY - top;
+    for (const unit of units) {
+        const {x, y, w, h} = unitBounds(unit, width, height);
+        if (mx >= x && mx <= x + w && my >= y && my <= y + h) {
+            return unit;
+        }
+    }
+    return null;
+}
+
+const drawTreemap = (id: string, clickable: boolean, units: Unit[]) => {
     const canvas = document.getElementById(id) as HTMLCanvasElement;
     if (!canvas || !canvas.getContext) {
         return;
@@ -148,27 +169,23 @@ const drawGraph = (id: string, units: Unit[]) => {
     const resizeObserver = new ResizeObserver(queueDraw);
     resizeObserver.observe(canvas);
     const handleHover = ({clientX, clientY}: { clientX: number, clientY: number }) => {
-        const {width, height, left, top} = canvas.getBoundingClientRect();
-        const mx = clientX - left;
-        const my = clientY - top;
-        const prev = hovered;
-        hovered = null;
-        for (const unit of units) {
-            const {x, y, w, h} = unitBounds(unit, width, height);
-            if (mx >= x && mx <= x + w && my >= y && my <= y + h) {
-                hovered = unit;
-                break;
-            }
-        }
-        if (prev === hovered) {
+        const unit = findUnit(canvas, units, clientX, clientY);
+        if (unit === hovered) {
             return;
         }
+        if (clickable) {
+            canvas.style.cursor = unit ? "pointer" : "default";
+        }
+        hovered = unit;
         dirty = true;
         queueDraw();
     }
     const handleLeave = () => {
         if (!hovered) {
             return;
+        }
+        if (clickable) {
+            canvas.style.cursor = "default";
         }
         hovered = null;
         dirty = true;
@@ -184,12 +201,21 @@ const drawGraph = (id: string, units: Unit[]) => {
         handleHover(e.touches[0]);
     });
     canvas.addEventListener("touchend", handleLeave);
+    canvas.addEventListener("click", ({clientX, clientY}) => {
+        const unit = findUnit(canvas, units, clientX, clientY);
+        if (!unit || !unit.name || !clickable) {
+            return;
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.set("unit", unit.name);
+        window.location.href = url.toString();
+    });
     draw(canvas, units);
 };
 
 // noinspection JSUnusedGlobalSymbols
 interface Window {
-    drawGraph: (id: string, units: Unit[]) => void;
+    drawTreemap: (id: string, clickable: boolean, units: Unit[]) => void;
 }
 
-window.drawGraph = drawGraph;
+window.drawTreemap = drawTreemap;

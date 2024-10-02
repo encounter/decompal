@@ -19,28 +19,42 @@ use std::{
 use axum::{http::header, Router};
 use tokio::{net::TcpListener, signal};
 use tower::ServiceBuilder;
-use tower_http::{timeout::TimeoutLayer, ServiceBuilderExt};
+use tower_http::{
+    timeout::TimeoutLayer,
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+    ServiceBuilderExt,
+};
+use tracing_subscriber::{filter::LevelFilter, EnvFilter};
 
-use crate::{config::Config, db::Database, handlers::build_router, templates::Templates};
+use crate::{
+    config::Config, db::Database, github::GitHub, handlers::build_router, templates::Templates,
+};
 
 #[derive(Clone)]
 struct AppState {
     config: Config,
     db: Database,
-    github: github::Client,
+    github: GitHub,
     templates: Templates,
 }
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                // Default to info level
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
 
     let config: Config = {
         let file = BufReader::new(File::open("config.yml").expect("Failed to open config file"));
         serde_yaml::from_reader(file).expect("Failed to parse config file")
     };
-    let db = Database::open(&config.app).await.expect("Failed to open database");
-    let github = github::create(&config.app).await.expect("Failed to create GitHub client");
+    let db = Database::new(&config.app).await.expect("Failed to open database");
+    let github = GitHub::new(&config.app).await.expect("Failed to create GitHub client");
     let templates = templates::create("templates");
     let state = AppState { config, db: db.clone(), github, templates };
 
@@ -71,7 +85,11 @@ fn app(state: AppState) -> Router {
     let middleware = ServiceBuilder::new()
         .sensitive_request_headers(sensitive_headers.clone())
         .sensitive_response_headers(sensitive_headers)
-        .trace_for_http()
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                .on_response(DefaultOnResponse::new().level(tracing::Level::INFO)),
+        )
         .layer(TimeoutLayer::new(Duration::from_secs(10)))
         .compression();
     build_router().layer(middleware).with_state(state)

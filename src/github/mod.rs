@@ -5,11 +5,13 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use axum::http::StatusCode;
+use moka::future::Cache;
 use objdiff_core::bindings::report::Report;
 use octocrab::{
-    models::{ArtifactId, RunId},
+    models::{repos::RepoCommitPage, ArtifactId, Author, RunId},
     params::actions::ArchiveFormat,
-    Octocrab,
+    GitHubError, Octocrab,
 };
 use regex::Regex;
 use tokio::{sync::Semaphore, task::JoinSet};
@@ -20,23 +22,64 @@ use crate::{
     AppState,
 };
 
-pub type Client = Octocrab;
+#[derive(Clone)]
+pub struct GitHub {
+    pub client: Octocrab,
+    #[allow(dead_code)]
+    pub profile: Author,
+    commit_cache: Cache<GetCommit, Option<RepoCommitPage>>,
+}
 
-pub async fn create(config: &AppConfig) -> Result<Octocrab> {
-    let client = Octocrab::builder()
-        .personal_token(config.github_token.clone())
-        .build()
-        .context("Failed to create GitHub client")?;
-    octocrab::initialise(client.clone());
-    let profile = client.current().user().await.context("Failed to fetch current user")?;
-    tracing::info!("Logged in as {}", profile.login);
-    Ok(client)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GetCommit {
+    owner: String,
+    repo: String,
+    sha: String,
+}
+
+impl GitHub {
+    pub async fn new(config: &AppConfig) -> Result<Self> {
+        let client = Octocrab::builder()
+            .personal_token(config.github_token.clone())
+            .build()
+            .context("Failed to create GitHub client")?;
+        octocrab::initialise(client.clone());
+        let profile = client.current().user().await.context("Failed to fetch current user")?;
+        tracing::info!("Logged in as {}", profile.login);
+        let commit_cache = Cache::builder().max_capacity(100).build();
+        Ok(Self { client, profile, commit_cache })
+    }
+
+    pub async fn get_commit(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> Result<Option<RepoCommitPage>> {
+        let key =
+            GetCommit { owner: owner.to_string(), repo: repo.to_string(), sha: sha.to_string() };
+        if let Some(commit) = self.commit_cache.get(&key).await {
+            return Ok(commit);
+        }
+        let commit =
+            match self.client.repos(owner, repo).list_commits().sha(sha).per_page(1).send().await {
+                Ok(page) => page.items.into_iter().next().map(|c| c.commit),
+                Err(octocrab::Error::GitHub {
+                    source: GitHubError { status_code: StatusCode::NOT_FOUND, .. },
+                    ..
+                }) => None,
+                Err(e) => return Err(e.into()),
+            };
+        self.commit_cache.insert(key, commit.clone()).await;
+        Ok(commit)
+    }
 }
 
 pub async fn run(state: &mut AppState, owner: &str, repo: &str, stop_run_id: u64) -> Result<()> {
     tracing::info!("Refreshing project {}/{}", owner, repo);
     let existing = state.db.get_project_info(owner, repo, None).await?;
-    let repo = state.github.repos(owner, repo).get().await.context("Failed to fetch repo")?;
+    let repo =
+        state.github.client.repos(owner, repo).get().await.context("Failed to fetch repo")?;
     let branch = repo.default_branch.as_deref().unwrap_or("main");
     let Some(owner) = repo.owner else {
         return Err(anyhow!("Repo has no owner"));
@@ -56,6 +99,7 @@ pub async fn run(state: &mut AppState, owner: &str, repo: &str, stop_run_id: u64
     'outer: loop {
         let result = state
             .github
+            .client
             .workflows(&project.owner, &project.repo)
             .list_runs("build.yml")
             .branch(branch)
@@ -173,13 +217,15 @@ struct ProcessArtifactResult {
 }
 
 async fn process_workflow_run(
-    github: Client,
+    github: GitHub,
     project: Project,
     run_id: RunId,
 ) -> Result<ProcessWorkflowRunResult> {
     let artifacts = github
+        .client
         .all_pages(
             github
+                .client
                 .actions()
                 .list_workflow_run_artifacts(&project.owner, &project.repo, run_id)
                 .send()
@@ -264,12 +310,13 @@ async fn process_workflow_run(
 type DownloadArtifactResult = Result<Vec<(String, Arc<Report>)>>;
 
 async fn download_artifact(
-    github: Client,
+    github: GitHub,
     project: Project,
     artifact_id: ArtifactId,
     version: String,
 ) -> DownloadArtifactResult {
     let bytes = github
+        .client
         .actions()
         .download_artifact(&project.owner, &project.repo, artifact_id, ArchiveFormat::Zip)
         .await?;

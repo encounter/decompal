@@ -58,15 +58,38 @@ impl<E: Into<anyhow::Error>> From<E> for AppError {
     fn from(err: E) -> Self { Self::Internal(err.into()) }
 }
 
-pub fn parse_accept(headers: &HeaderMap) -> Vec<Mime> {
-    headers
+pub fn parse_accept(headers: &HeaderMap, ext: Option<&str>) -> Vec<Mime> {
+    // Explicit extension takes precedence
+    if let Some(ext) = ext {
+        return match ext.to_ascii_lowercase().as_str() {
+            "json" => vec![mime::APPLICATION_JSON],
+            "binpb" | "proto" => vec![Mime::from_str("application/x-protobuf").unwrap()],
+            "svg" => vec![mime::IMAGE_SVG],
+            _ => {
+                if let Some(format) = image::ImageFormat::from_extension(ext) {
+                    vec![Mime::from_str(format.to_mime_type()).unwrap()]
+                } else {
+                    // An unknown extension should be NOT_ACCEPTABLE, not */*.
+                    vec![]
+                }
+            }
+        };
+    }
+    // Otherwise, parse the Accept header
+    let result = headers
         .get(header::ACCEPT)
         .and_then(|value| value.to_str().ok())
         .iter()
         .flat_map(|s| s.split(','))
         .map(|s| s.trim())
         .filter_map(|s| Mime::from_str(s).ok())
-        .collect()
+        .collect::<Vec<_>>();
+    if result.is_empty() {
+        // If no Accept header is present, use */*
+        vec![mime::STAR_STAR]
+    } else {
+        result
+    }
 }
 
 pub struct Protobuf<T: Message>(pub Arc<T>);

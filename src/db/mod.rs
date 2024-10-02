@@ -29,7 +29,7 @@ struct ReportKey {
 type UnitKey = [u8; 32];
 
 impl Database {
-    pub async fn open(config: &AppConfig) -> Result<Self> {
+    pub async fn new(config: &AppConfig) -> Result<Self> {
         if !Sqlite::database_exists(&config.db_url).await.unwrap_or(false) {
             tracing::info!(db_url = %config.db_url, "Creating database");
             Sqlite::create_database(&config.db_url).await.context("Failed to create database")?;

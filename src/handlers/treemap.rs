@@ -1,58 +1,31 @@
 use anyhow::Result;
 use image::ImageFormat;
-use objdiff_core::bindings::report::{Report, ReportUnit};
 use palette::{Mix, Srgb};
 use serde::Serialize;
 use streemap::Rect;
 
 use crate::{handlers::report::ReportTemplateUnit, svg, templates::render, AppState};
 
-#[derive(Clone)]
-pub struct ReportUnitItem<'report> {
-    pub unit: &'report ReportUnit,
-    pub size: f32,
-    pub bounds: Rect<f32>,
-}
-
-impl<'report> ReportUnitItem<'report> {
-    pub fn with_size(unit: &'report ReportUnit, size: f32) -> ReportUnitItem<'report> {
-        ReportUnitItem { unit, size, bounds: Rect::from_size(0.0, 0.0) }
-    }
-
-    pub fn unit(&self) -> &'report ReportUnit { self.unit }
-}
-
-pub fn layout_units(
-    report: &Report,
-    w: u32,
-    h: u32,
-    mut predicate: impl FnMut(&ReportUnit) -> bool,
-) -> Vec<ReportUnitItem> {
-    let aspect = w as f32 / h as f32;
+pub fn layout_units<T, S, R>(items: &mut [T], aspect: f32, size_fn: S, mut set_rect_fn: R)
+where
+    S: Fn(&T) -> f32,
+    R: FnMut(&mut T, Rect<f32>),
+{
     let rect = if aspect > 1.0 {
         Rect::from_size(1.0, 1.0 / aspect)
     } else {
         Rect::from_size(aspect, 1.0)
     };
-    let mut items = report
-        .units
-        .iter()
-        .filter_map(|unit| {
-            if !predicate(unit) {
-                return None;
-            }
-            let total_code = unit.measures.as_ref().unwrap().total_code;
-            if total_code == 0 {
-                return None;
-            }
-            Some(ReportUnitItem::with_size(
-                unit,
-                total_code as f32 / report.measures.as_ref().unwrap().total_code as f32,
-            ))
-        })
-        .collect::<Vec<_>>();
-    streemap::ordered_pivot_by_middle(rect, &mut items, |i| i.size, |i, s| i.bounds = s);
-    items
+    streemap::ordered_pivot_by_middle(rect, items, size_fn, |item, mut rect| {
+        if aspect > 1.0 {
+            rect.y *= aspect;
+            rect.h *= aspect;
+        } else {
+            rect.x /= aspect;
+            rect.w /= aspect;
+        }
+        set_rect_fn(item, rect);
+    });
 }
 
 #[derive(Serialize)]

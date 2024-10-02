@@ -26,7 +26,7 @@ pub fn render_image(svg: &str, format: ImageFormat) -> Result<Vec<u8>> {
         })
         .clone();
     let opt = Options { fontdb, ..Default::default() };
-    let tree = Tree::from_str(&svg, &opt).context("Failed to parse SVG")?;
+    let tree = Tree::from_str(svg, &opt).context("Failed to parse SVG")?;
     let rect = tree.size().to_int_size();
     let w = rect.width().clamp(1, 2048);
     let h = rect.height().clamp(1, 2048);

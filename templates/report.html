@@ -5,21 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <meta name="darkreader-lock">
-    <meta name="description" content="Decompilation progress report for {{ project_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %}">
-    <title>{{ project_short_name }}{% if current_category.id != "all" %} ({{ current_category.name }}){% endif %} • Progress Report</title>
-    <link rel="stylesheet" href="/css/main.min.css?5">
-    <script src="https://unpkg.com/htmx.org@2.0.2"
-            integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
-            crossorigin="anonymous"></script>
-    <script src="/js/graph.min.js?6"></script>
-    <meta property="og:title" content="{{ project_short_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %} is {{ measures.matched_code_percent | round(2) }}% decompiled">
-    <meta property="og:description" content="Decompilation progress report for {{ project_name }}{% if current_category.id != 'all' %} ({{ current_category.name }}){% endif %}">
+    <meta name="description" content="Decompilation progress report for {{ project_name }}">
+    <title>{{ project_short_name }} • Progress Report</title>
+    <link rel="stylesheet" href="/css/main.min.css?1">
+    <script src="/js/treemap.min.js?1"></script>
+    <meta property="og:title" content="{{ project_short_name }} is {{ measures.matched_code_percent | round(2) }}% decompiled">
+    <meta property="og:description" content="Decompilation progress report for {{ project_name }}">
     <meta property="og:image" content="{{ image_url | safe }}">
     <meta property="og:url" content="{{ canonical_url | safe }}">
 </head>
 <body>
 <header>
-    <nav data-hx-boost="false">
+    <nav>
         <ul>
             <li>
                 <a href="https://decomp.dev">
@@ -51,10 +48,13 @@
     </nav>
 </header>
 <main>
-    <h3>
-        {{ project_short_name }}{% if current_category.id != "all" %} ({{ current_category.name }}){% endif %} is {{ measures.matched_code_percent | round(2) }}% decompiled
-    </h3>
+    <h3>{{ project_short_name }} is {{ measures.matched_code_percent | round(2) }}% decompiled</h3>
+    {% if not current_unit %}
     <h4 class="muted">{{ measures.complete_code_percent | round(2) }}% fully linked</h4>
+    {% endif %}
+    {% if source_file_url %}
+    <h4 class="muted"><a href="{{ source_file_url | safe }}" target="_blank">View source file</a></h4>
+    {% endif %}
     <h6 class="report-header">Code</h6>
     <div class="progress-root code">
         <div class="progress-section" style="width: {{ measures.complete_code_percent }}%"></div>
@@ -88,9 +88,38 @@
              style="width: {{ measures.matched_data_percent - measures.complete_data_percent }}%"
              data-tooltip="{{ measures.matched_data_percent | round(2) }}% perfect match"></div>
     </div>
+    <h6 class="report-header">Commit</h6>
+    <div>
+        {% if commit_message %}
+        <pre><a href="{{ commit_url | safe }}" target="_blank">{{ commit[:7] }}</a> | {{ commit_message }}</pre>
+        {% endif %}
+        <div role="group">
+            {% if prev_commit_path %}
+            <a role="button" href="{{ prev_commit_path | safe }}" class="outline secondary">Previous</a>
+            {% else %}
+            <button class="outline secondary" disabled>Previous</button>
+            {% endif %}
+            {% if next_commit_path %}
+            <a role="button" href="{{ next_commit_path | safe }}" class="outline secondary">Next</a>
+            {% else %}
+            <button class="outline secondary" disabled>Next</button>
+            {% endif %}
+            {% if latest_commit_path %}
+            <a role="button" href="{{ latest_commit_path | safe }}" class="primary">Latest</a>
+            {% else %}
+            <button class="primary" disabled>Latest</button>
+            {% endif %}
+        </div>
+    </div>
+    {% if current_unit %}
+    <h6 class="report-header">Functions</h6>
+    <div role="group">
+        <a role="button" href="{{ units_path | safe }}">Back to units</a>
+    </div>
+    {% else %}
     <h6 class="report-header">Units</h6>
     {% if categories | length > 1 %}
-    <details class="dropdown" data-hx-boost="false">
+    <details class="dropdown">
         <summary>{{ current_category.name }}</summary>
         <ul>
             {% for category in categories %}
@@ -99,26 +128,14 @@
         </ul>
     </details>
     {% endif %}
+    {% endif %}
     <script>
-        document.write('<canvas id="graph" width="100%" data-hx-preserve="true"></canvas>');
-        drawGraph("graph", {{ units | tojson }});
+        document.write('<canvas id="treemap" width="100%"></canvas>');
+        drawTreemap("treemap", {{ not current_unit }}, {{ units | tojson }});
     </script>
     <noscript>
-        <img id="graph" src="{{ image_url | safe }}" alt="Progress graph">
+        <img id="treemap" src="{{ image_url | safe }}" alt="Progress graph">
     </noscript>
-    <h6 class="report-header">Links</h6>
-    <div>
-        <p>
-            <a href="{{ project_url | safe }}" target="_blank">GitHub</a> (<a
-                href="{{ project_url | safe }}/commit/{{ commit }}" target="_blank">{{ commit[:7] }}</a>)
-        </p>
-        {% if prev_commit %}
-        <p><a href="{{ project_path | safe }}/{{ version }}/{{ prev_commit }}">Previous commit</a></p>
-        {% endif %}
-        {% if next_commit %}
-        <p><a href="{{ project_path | safe }}/{{ version }}/{{ next_commit }}">Next commit</a></p>
-        {% endif %}
-    </div>
 </main>
 {% include 'fragments/footer.html' %}
 </body>

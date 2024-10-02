@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
 use image::ImageFormat;
-use objdiff_core::bindings::report::{Measures, ReportCategory};
+use objdiff_core::bindings::report::Measures;
 use serde::{Deserialize, Serialize};
 
-use crate::{models::ReportFile, svg};
+use crate::svg;
 
 #[derive(Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -30,25 +30,19 @@ pub struct ShieldResponse {
 }
 
 pub fn render(
-    report: &ReportFile,
     measures: &Measures,
-    current_category: Option<&ReportCategory>,
+    default_label: &str,
     params: &ShieldParams,
 ) -> Result<ShieldResponse> {
-    let label = if let Some(label) = params.label.clone() {
-        label
-    } else if let Some(category) = current_category {
-        category.name.clone()
-    } else {
-        report.project.short_name().to_string()
-    };
+    let label = params.label.clone().unwrap_or_else(|| default_label.to_string());
     let message = if let Some(measure) = &params.measure {
         match measure.as_str() {
             "code" => format!("{:.2}%", measures.matched_code_percent),
             "data" => format!("{:.2}%", measures.matched_data_percent),
-            "functions" => format!("{:.2}%", measures.matched_functions_percent),
+            "functions" => format!("{}/{}", measures.matched_functions, measures.total_functions),
             "complete_code" => format!("{:.2}%", measures.complete_code_percent),
             "complete_data" => format!("{:.2}%", measures.complete_data_percent),
+            "complete_units" => format!("{}/{}", measures.complete_units, measures.total_units),
             _ => return Err(anyhow!("Unknown measure")),
         }
     } else {
@@ -65,12 +59,11 @@ pub fn render(
 }
 
 pub fn render_svg(
-    report: &ReportFile,
     measures: &Measures,
-    current_category: Option<&ReportCategory>,
+    default_label: &str,
     params: &ShieldParams,
 ) -> Result<String> {
-    let response = render(report, measures, current_category, params)?;
+    let response = render(measures, default_label, params)?;
     let mut builder = badge_maker::BadgeBuilder::new();
     builder.label(&response.label).message(&response.message);
     if let Some(color) = &response.color {
@@ -87,12 +80,11 @@ pub fn render_svg(
 }
 
 pub fn render_image(
-    report: &ReportFile,
     measures: &Measures,
-    current_category: Option<&ReportCategory>,
+    default_label: &str,
     params: &ShieldParams,
     format: ImageFormat,
 ) -> Result<Vec<u8>> {
-    let svg = render_svg(report, measures, current_category, params)?;
+    let svg = render_svg(measures, default_label, params)?;
     svg::render_image(&svg, format)
 }

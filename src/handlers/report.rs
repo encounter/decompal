@@ -1,4 +1,4 @@
-use std::{iter, str::FromStr, time::Instant};
+use std::{borrow::Cow, iter, time::Instant};
 
 use anyhow::{Context, Result};
 use axum::{
@@ -9,7 +9,7 @@ use axum::{
 };
 use image::ImageFormat;
 use mime::Mime;
-use objdiff_core::bindings::report::{Measures, ReportCategory};
+use objdiff_core::bindings::report::{Measures, ReportCategory, ReportUnit};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -41,6 +41,7 @@ pub struct ReportQuery {
     h: Option<u32>,
     #[serde(flatten)]
     shield: badge::ShieldParams,
+    unit: Option<String>,
 }
 
 impl ReportQuery {
@@ -61,18 +62,25 @@ struct ReportTemplateContext<'a> {
     measures: TemplateMeasures,
     units: &'a [ReportTemplateUnit<'a>],
     versions: &'a [ReportTemplateVersion<'a>],
-    prev_commit: Option<&'a str>,
-    next_commit: Option<&'a str>,
+    prev_commit_path: Option<&'a str>,
+    next_commit_path: Option<&'a str>,
+    latest_commit_path: Option<&'a str>,
     categories: &'a [ReportCategoryItem<'a>],
     current_category: &'a ReportCategoryItem<'a>,
     canonical_path: &'a str,
     canonical_url: &'a str,
     image_url: &'a str,
+    current_unit: Option<&'a str>,
+    units_path: &'a str,
+    commit_message: Option<&'a str>,
+    commit_url: &'a str,
+    source_file_url: Option<&'a str>,
 }
 
 #[derive(Serialize)]
 pub struct ReportTemplateUnit<'a> {
     name: &'a str,
+    total_code: u64,
     fuzzy_match_percent: f32,
     color: String,
     x: f32,
@@ -187,6 +195,11 @@ pub async fn get_report(
 ) -> Result<Response, AppError> {
     let start = Instant::now();
     let (params, ext) = extract_extension(params);
+    let acceptable = parse_accept(&headers, ext.as_deref());
+    if acceptable.is_empty() {
+        return Err(AppError::Status(StatusCode::NOT_ACCEPTABLE));
+    }
+
     let mut commit = params.commit.as_deref();
     if matches!(commit, Some(c) if c.eq_ignore_ascii_case("latest")) {
         commit = None;
@@ -212,70 +225,38 @@ pub async fn get_report(
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };
 
-    if let Some(mode) = query.mode.as_deref() {
-        match mode.to_ascii_lowercase().as_str() {
-            "shield" => mode_shield(report, query, headers, ext),
-            "report" => mode_report(report, project_info, &state, uri, query, headers, start, ext),
-            _ => Err(AppError::Status(StatusCode::BAD_REQUEST)),
-        }
-    } else {
-        mode_report(report, project_info, &state, uri, query, headers, start, ext)
+    let scope = apply_scope(&report, &project_info, &query)?;
+    match query.mode.as_deref().unwrap_or("report").to_ascii_lowercase().as_str() {
+        "shield" => mode_shield(&scope, query, &acceptable),
+        "report" => mode_report(&scope, &state, uri, query, start, &acceptable).await,
+        _ => Err(AppError::Status(StatusCode::BAD_REQUEST)),
     }
 }
 
-fn mode_report(
-    report: ReportFile,
-    project_info: ProjectInfo,
+#[allow(clippy::too_many_arguments)]
+async fn mode_report(
+    scope: &Scope<'_>,
     state: &AppState,
     uri: Uri,
     query: ReportQuery,
-    headers: HeaderMap,
     start: Instant,
-    ext: Option<String>,
+    acceptable: &[Mime],
 ) -> Result<Response, AppError> {
-    let (measures, current_category, units) = apply_category(&report, &query)?;
-    let acceptable = if let Some(ext) = ext {
-        vec![match ext.to_ascii_lowercase().as_str() {
-            "json" => mime::APPLICATION_JSON,
-            "binpb" | "proto" => Mime::from_str("application/x-protobuf")?,
-            "svg" => mime::IMAGE_SVG,
-            _ => {
-                if let Some(format) = ImageFormat::from_extension(ext) {
-                    Mime::from_str(format.to_mime_type())?
-                } else {
-                    return Err(AppError::Status(StatusCode::NOT_ACCEPTABLE));
-                }
-            }
-        }]
-    } else {
-        if !headers.contains_key(header::ACCEPT) {
-            return Ok(Json(report.report).into_response());
-        }
-        parse_accept(&headers)
-    };
     for mime in acceptable {
         if (mime.type_() == mime::STAR && mime.subtype() == mime::STAR)
             || (mime.type_() == mime::TEXT && mime.subtype() == mime::HTML)
         {
-            let mut rendered = render_template(
-                &report,
-                &project_info,
-                measures,
-                current_category,
-                &units,
-                &state,
-                uri,
-            )?;
+            let mut rendered = render_template(scope, state, uri).await?;
             let elapsed = start.elapsed();
             rendered = rendered.replace("[[time]]", &format!("{}ms", elapsed.as_millis()));
             return Ok(Html(rendered).into_response());
         } else if mime.type_() == mime::APPLICATION && mime.subtype() == mime::JSON {
-            return Ok(Json(report.report).into_response());
+            return Ok(Json(scope.report.report.clone()).into_response());
         } else if mime.type_() == mime::APPLICATION && mime.subtype() == PROTOBUF {
-            return Ok(Protobuf(report.report).into_response());
+            return Ok(Protobuf(scope.report.report.clone()).into_response());
         } else if mime.type_() == mime::IMAGE && mime.subtype() == mime::SVG {
             let (w, h) = query.size();
-            let svg = treemap::render_svg(&units, w, h, &state)?;
+            let svg = treemap::render_svg(&scope.units, w, h, state)?;
             return Ok(([(header::CONTENT_TYPE, mime::IMAGE_SVG.as_ref())], svg).into_response());
         } else if mime.type_() == mime::IMAGE {
             let format = if mime.subtype() == mime::STAR {
@@ -286,7 +267,7 @@ fn mode_report(
                     .ok_or_else(|| AppError::Status(StatusCode::NOT_ACCEPTABLE))?
             };
             let (w, h) = query.size();
-            let data = treemap::render_image(&units, w, h, &state, format)?;
+            let data = treemap::render_image(&scope.units, w, h, state, format)?;
             return Ok(([(header::CONTENT_TYPE, format.to_mime_type())], data).into_response());
         }
     }
@@ -294,39 +275,20 @@ fn mode_report(
 }
 
 fn mode_shield(
-    report: ReportFile,
+    Scope { report, measures, label, .. }: &Scope<'_>,
     query: ReportQuery,
-    headers: HeaderMap,
-    ext: Option<String>,
+    acceptable: &[Mime],
 ) -> Result<Response, AppError> {
-    let (measures, current_category, _units) = apply_category(&report, &query)?;
-    let acceptable = if let Some(ext) = ext {
-        vec![match ext.to_ascii_lowercase().as_str() {
-            "json" => mime::APPLICATION_JSON,
-            "svg" => mime::IMAGE_SVG,
-            _ => {
-                if let Some(format) = ImageFormat::from_extension(ext) {
-                    Mime::from_str(format.to_mime_type())?
-                } else {
-                    return Err(AppError::Status(StatusCode::NOT_ACCEPTABLE));
-                }
-            }
-        }]
-    } else {
-        if !headers.contains_key(header::ACCEPT) {
-            return Ok(Json(report.report).into_response());
-        }
-        parse_accept(&headers)
-    };
+    let label = label.unwrap_or_else(|| report.project.short_name());
     for mime in acceptable {
         if (mime.type_() == mime::STAR && mime.subtype() == mime::STAR)
             || (mime.type_() == mime::IMAGE && mime.subtype() == mime::SVG)
             || (mime.type_() == mime::TEXT && mime.subtype() == mime::HTML)
         {
-            let data = badge::render_svg(&report, measures, current_category, &query.shield)?;
+            let data = badge::render_svg(measures, label, &query.shield)?;
             return Ok(([(header::CONTENT_TYPE, mime::IMAGE_SVG.as_ref())], data).into_response());
         } else if mime.type_() == mime::APPLICATION && mime.subtype() == mime::JSON {
-            let data = badge::render(&report, measures, current_category, &query.shield)?;
+            let data = badge::render(measures, label, &query.shield)?;
             return Ok(Json(data).into_response());
         } else if mime.type_() == mime::IMAGE {
             let format = if mime.subtype() == mime::STAR {
@@ -336,8 +298,7 @@ fn mode_shield(
                 ImageFormat::from_mime_type(mime.essence_str())
                     .ok_or_else(|| AppError::Status(StatusCode::NOT_ACCEPTABLE))?
             };
-            let data =
-                badge::render_image(&report, measures, current_category, &query.shield, format)?;
+            let data = badge::render_image(measures, label, &query.shield, format)?;
             return Ok(([(header::CONTENT_TYPE, format.to_mime_type())], data).into_response());
         }
     }
@@ -363,10 +324,21 @@ const EMPTY_MEASURES: Measures = Measures {
     complete_units: 0,
 };
 
-fn apply_category<'a>(
+struct Scope<'a> {
     report: &'a ReportFile,
+    project_info: &'a ProjectInfo,
+    measures: &'a Measures,
+    current_category: Option<&'a ReportCategory>,
+    current_unit: Option<&'a ReportUnit>,
+    units: Vec<ReportTemplateUnit<'a>>,
+    label: Option<&'a str>,
+}
+
+fn apply_scope<'a>(
+    report: &'a ReportFile,
+    project_info: &'a ProjectInfo,
     query: &ReportQuery,
-) -> Result<(&'a Measures, Option<&'a ReportCategory>, Vec<ReportTemplateUnit<'a>>)> {
+) -> Result<Scope<'a>> {
     let mut measures = report.report.measures.as_ref().unwrap_or(&EMPTY_MEASURES);
     let mut current_category = None;
     let mut category_id_filter = None;
@@ -377,53 +349,109 @@ fn apply_category<'a>(
         current_category = Some(category);
         category_id_filter = Some(category.id.clone());
     }
+    let mut current_unit = None;
+    if let Some(unit) = query
+        .unit
+        .as_ref()
+        .and_then(|unit_name| report.report.units.iter().find(|u| u.name == *unit_name))
+    {
+        measures = unit.measures.as_ref().unwrap_or(&EMPTY_MEASURES);
+        current_unit = Some(unit);
+    }
     let (w, h) = query.size();
-    let aspect = w as f32 / h as f32;
-    let units = treemap::layout_units(&report.report, w, h, |item| {
-        if let Some(category_id) = &category_id_filter {
-            item.metadata
-                .as_ref()
-                .map_or(false, |m| m.progress_categories.iter().any(|c| c == category_id))
+    let mut units =
+        if let Some(unit) = current_unit {
+            unit.functions
+                .iter()
+                .filter_map(|f| {
+                    if f.size == 0 {
+                        return None;
+                    }
+                    Some(ReportTemplateUnit {
+                        name: f
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.demangled_name.as_deref())
+                            .unwrap_or(&f.name),
+                        total_code: f.size,
+                        fuzzy_match_percent: f.fuzzy_match_percent,
+                        color: treemap::unit_color(f.fuzzy_match_percent),
+                        x: 0.0,
+                        y: 0.0,
+                        w: 0.0,
+                        h: 0.0,
+                    })
+                })
+                .collect::<Vec<_>>()
         } else {
-            true
-        }
-    })
-    .into_iter()
-    .map(|item| {
-        let unit = item.unit();
-        let match_percent =
-            unit.measures.as_ref().map(|m| m.fuzzy_match_percent).unwrap_or_default();
-        let mut bounds = item.bounds;
-        if aspect > 1.0 {
-            bounds.y *= aspect;
-            bounds.h *= aspect;
-        } else {
-            bounds.x /= aspect;
-            bounds.w /= aspect;
-        }
-        ReportTemplateUnit {
-            name: &unit.name,
-            fuzzy_match_percent: match_percent,
-            color: treemap::unit_color(match_percent),
-            x: bounds.x,
-            y: bounds.y,
-            w: bounds.w,
-            h: bounds.h,
-        }
-    })
-    .collect();
-    Ok((measures, current_category, units))
+            report
+                .report
+                .units
+                .iter()
+                .filter_map(|unit| {
+                    if let Some(category_id) = &category_id_filter {
+                        if !unit.metadata.as_ref().map_or(false, |m| {
+                            m.progress_categories.iter().any(|c| c == category_id)
+                        }) {
+                            return None;
+                        }
+                    }
+                    let measures = unit.measures.as_ref()?;
+                    if measures.total_code == 0 {
+                        return None;
+                    }
+                    Some(ReportTemplateUnit {
+                        name: &unit.name,
+                        total_code: measures.total_code,
+                        fuzzy_match_percent: measures.fuzzy_match_percent,
+                        color: treemap::unit_color(measures.fuzzy_match_percent),
+                        x: 0.0,
+                        y: 0.0,
+                        w: 0.0,
+                        h: 0.0,
+                    })
+                })
+                .collect::<Vec<_>>()
+        };
+    treemap::layout_units(
+        &mut units,
+        w as f32 / h as f32,
+        |i| i.total_code as f32,
+        |i, r| {
+            i.x = r.x;
+            i.y = r.y;
+            i.w = r.w;
+            i.h = r.h;
+        },
+    );
+    let label = current_unit
+        .as_ref()
+        .map(|u| u.name.rsplit_once('/').map_or(u.name.as_str(), |(_, name)| name))
+        .or_else(|| current_category.as_ref().map(|c| c.name.as_str()));
+    Ok(Scope { report, project_info, measures, current_category, current_unit, units, label })
 }
 
-fn render_template(
-    report: &ReportFile,
-    project_info: &ProjectInfo,
-    measures: &Measures,
-    current_category: Option<&ReportCategory>,
-    units: &[ReportTemplateUnit],
-    state: &AppState,
-    uri: Uri,
-) -> Result<String> {
+async fn render_template(scope: &Scope<'_>, state: &AppState, uri: Uri) -> Result<String> {
+    let Scope { report, project_info, measures, current_category, current_unit, units, label } =
+        scope;
+    let commit = match state
+        .github
+        .get_commit(&project_info.project.owner, &project_info.project.repo, &report.commit.sha)
+        .await
+    {
+        Ok(commit) => commit,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to get commit {}/{}@{}: {}",
+                project_info.project.owner,
+                project_info.project.repo,
+                report.commit.sha,
+                e
+            );
+            None
+        }
+    };
+
     let request_url = Url::parse(&uri.to_string()).context("Failed to parse URI")?;
     let project_base_path =
         format!("/{}/{}", project_info.project.owner, project_info.project.repo);
@@ -445,41 +473,89 @@ fn render_template(
         })
         .collect::<Vec<_>>();
 
-    let all_url = canonical_url.set_query("category", None);
+    let all_url = canonical_url.query_param("category", None);
     let all_category =
         ReportCategoryItem { id: "all", name: "All", path: all_url.path_and_query().to_string() };
     let current_category = current_category
         .map(|c| {
             let path =
-                canonical_url.set_query("category", Some(&c.id)).path_and_query().to_string();
+                canonical_url.query_param("category", Some(&c.id)).path_and_query().to_string();
             ReportCategoryItem { id: &c.id, name: &c.name, path }
         })
         .unwrap_or_else(|| all_category.clone());
     let categories = iter::once(all_category)
         .chain(report.report.categories.iter().map(|c| {
             let path =
-                canonical_url.set_query("category", Some(&c.id)).path_and_query().to_string();
+                canonical_url.query_param("category", Some(&c.id)).path_and_query().to_string();
             ReportCategoryItem { id: &c.id, name: &c.name, path }
         }))
         .collect::<Vec<_>>();
 
+    let prev_commit_path = project_info.prev_commit.as_deref().map(|commit| {
+        let url = request_url.with_path(&format!(
+            "/{}/{}/{}/{}",
+            project_info.project.owner, project_info.project.repo, report.version, commit
+        ));
+        url.path_and_query().to_string()
+    });
+    let next_commit_path = project_info.next_commit.as_deref().map(|commit| {
+        let url = request_url.with_path(&format!(
+            "/{}/{}/{}/{}",
+            project_info.project.owner, project_info.project.repo, report.version, commit
+        ));
+        url.path_and_query().to_string()
+    });
+    let latest_commit_path = project_info.next_commit.as_deref().map(|_| {
+        let url = request_url.with_path(&format!(
+            "/{}/{}/{}",
+            project_info.project.owner, project_info.project.repo, report.version
+        ));
+        url.path_and_query().to_string()
+    });
+
+    let units_path = canonical_url.query_param("unit", None).path_and_query().to_string();
+    let commit_message = commit.as_ref().and_then(|c| c.message.lines().next());
+    let commit_url = format!("{}/commit/{}", project_info.project.repo_url(), report.commit.sha);
+    let source_file_url = current_unit
+        .and_then(|u| u.metadata.as_ref())
+        .and_then(|m| m.source_path.as_deref())
+        .map(|path| {
+            format!("{}/blob/{}/{}", project_info.project.repo_url(), report.commit.sha, path)
+        });
+    let project_name = if let Some(label) = label {
+        Cow::Owned(format!("{} ({})", project_info.project.name(), label))
+    } else {
+        project_info.project.name()
+    };
+    let project_short_name = if let Some(label) = label {
+        Cow::Owned(format!("{} ({})", project_info.project.short_name(), label))
+    } else {
+        Cow::Borrowed(project_info.project.short_name())
+    };
+
     render(&state.templates, "report.html", ReportTemplateContext {
         project: &report.project,
-        project_name: &report.project.name(),
-        project_short_name: report.project.short_name(),
+        project_name: project_name.as_ref(),
+        project_short_name: project_short_name.as_ref(),
         project_url: &report.project.repo_url(),
         project_path: &project_base_path,
         commit: &report.commit.sha,
         version: &report.version,
-        measures: TemplateMeasures::from(measures),
+        measures: TemplateMeasures::from(*measures),
         units,
         versions: &versions,
-        prev_commit: project_info.prev_commit.as_deref(),
-        next_commit: project_info.next_commit.as_deref(),
+        prev_commit_path: prev_commit_path.as_deref(),
+        next_commit_path: next_commit_path.as_deref(),
+        latest_commit_path: latest_commit_path.as_deref(),
         categories: &categories,
         current_category: &current_category,
         canonical_path: canonical_url.path_and_query(),
         canonical_url: canonical_url.as_ref(),
         image_url: image_url.as_ref(),
+        current_unit: current_unit.map(|u| u.name.as_str()),
+        units_path: &units_path,
+        commit_message,
+        commit_url: &commit_url,
+        source_file_url: source_file_url.as_deref(),
     })
 }

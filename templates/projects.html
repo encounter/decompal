@@ -6,12 +6,12 @@
     <meta name="color-scheme" content="light dark">
     <meta name="darkreader-lock">
     <meta name="description" content="Decompilation progress reports">
-    <link rel="stylesheet" href="/css/main.min.css?5">
+    <link rel="stylesheet" href="/css/main.min.css?1">
     <title>Projects • decomp.dev</title>
 </head>
 <body>
 <header>
-    <nav data-hx-boost="true">
+    <nav>
         <ul>
             <li>
                 <a href="https://decomp.dev">
@@ -22,7 +22,7 @@
                 <a href="/">Projects</a>
             </li>
             <li>
-                <details class="dropdown" data-hx-boost="true">
+                <details class="dropdown">
                     <summary>{{ current_sort.name }}</summary>
                     <ul>
                         {% for sort in sort_options %}
@@ -45,7 +45,7 @@
     <article class="project">
         <div class="project-header">
             <h3 class="project-title">
-                <a href="/{{ project.owner }}/{{ project.repo }}" data-hx-boost="true">
+                <a href="/{{ project.owner }}/{{ project.repo }}">
                     {{ project.name }}
                 </a>
             </h3>

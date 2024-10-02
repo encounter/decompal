@@ -3,14 +3,14 @@ use std::path::{Path, PathBuf};
 use url::Url;
 
 pub trait UrlExt {
-    fn set_query(&self, key: &str, value: Option<&str>) -> Url;
+    fn query_param(&self, key: &str, value: Option<&str>) -> Url;
     fn with_path(&self, path: &str) -> Url;
     fn path_and_query(&self) -> &str;
 }
 
 impl UrlExt for Url {
     #[inline]
-    fn set_query(&self, key: &str, value: Option<&str>) -> Url {
+    fn query_param(&self, key: &str, value: Option<&str>) -> Url {
         let mut out = self.clone();
         let mut pairs = out.query_pairs_mut();
         pairs.clear();
@@ -37,6 +37,9 @@ impl UrlExt for Url {
             }
         }
         drop(pairs);
+        if out.query() == Some("") {
+            out.set_query(None);
+        }
         out
     }
 
