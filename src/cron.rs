@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 use crate::{github, AppState};
@@ -21,7 +21,14 @@ pub async fn create(state: AppState) -> Result<Scheduler> {
 
 pub async fn refresh_projects(state: &mut AppState) -> Result<()> {
     for project_info in state.db.get_projects().await? {
-        github::run(state, &project_info.project.owner, &project_info.project.repo, 0).await?;
+        github::run(state, &project_info.project.owner, &project_info.project.repo, 0)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to refresh {}/{}",
+                    project_info.project.owner, project_info.project.repo
+                )
+            })?;
     }
     Ok(())
 }

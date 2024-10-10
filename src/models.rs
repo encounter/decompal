@@ -34,7 +34,7 @@ impl Project {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct ProjectInfo {
     pub project: Project,
-    pub commit: Commit,
+    pub commit: Option<Commit>,
     pub report_versions: Vec<String>,
     pub prev_commit: Option<String>,
     pub next_commit: Option<String>,

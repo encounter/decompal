@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                projects.id AS \"project_id!\",\n                owner AS \"owner!\",\n                repo AS \"repo!\",\n                name,\n                short_name,\n                default_version,\n                platform,\n                git_commit AS \"git_commit!\",\n                MAX(timestamp) AS \"timestamp: chrono::NaiveDateTime\",\n                JSON_GROUP_ARRAY(version ORDER BY version) AS versions\n            FROM projects JOIN reports ON projects.id = reports.project_id\n            WHERE timestamp = (\n                SELECT MAX(timestamp)\n                FROM reports\n                WHERE project_id = projects.id\n            )\n            GROUP BY projects.id\n            ORDER BY MAX(timestamp) DESC\n            ",
+  "query": "\n            SELECT\n                projects.id AS \"project_id!\",\n                owner AS \"owner!\",\n                repo AS \"repo!\",\n                name,\n                short_name,\n                default_version,\n                platform,\n                git_commit,\n                MAX(timestamp) AS \"timestamp: chrono::NaiveDateTime\",\n                JSON_GROUP_ARRAY(version ORDER BY version)\n                    FILTER (WHERE version IS NOT NULL) AS versions\n            FROM projects LEFT JOIN reports ON (\n                reports.project_id = projects.id\n                AND reports.timestamp = (\n                    SELECT MAX(timestamp)\n                    FROM reports\n                    WHERE project_id = projects.id\n                )\n            )\n            GROUP BY projects.id\n            ORDER BY MAX(timestamp) DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -39,7 +39,7 @@
         "type_info": "Text"
       },
       {
-        "name": "git_commit!",
+        "name": "git_commit",
         "ordinal": 7,
         "type_info": "Text"
       },
@@ -66,9 +66,9 @@
       true,
       true,
       true,
-      false,
-      false
+      true,
+      true
     ]
   },
-  "hash": "33ef6c68364ca0148a0cec67caba762484635c8e9881fe29b7f0e75cff235b31"
+  "hash": "1c5ea45ed729197e046adfd9a9129de3479799b64556826043d6dd909c314429"
 }

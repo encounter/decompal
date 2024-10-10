@@ -77,7 +77,11 @@ impl GitHub {
 
 pub async fn run(state: &mut AppState, owner: &str, repo: &str, stop_run_id: u64) -> Result<()> {
     tracing::info!("Refreshing project {}/{}", owner, repo);
-    let existing = state.db.get_project_info(owner, repo, None).await?;
+    let existing = state
+        .db
+        .get_project_info(owner, repo, None)
+        .await
+        .context("Failed to fetch project info")?;
     let repo =
         state.github.client.repos(owner, repo).get().await.context("Failed to fetch repo")?;
     let branch = repo.default_branch.as_deref().unwrap_or("main");
@@ -107,15 +111,22 @@ pub async fn run(state: &mut AppState, owner: &str, repo: &str, stop_run_id: u64
             .status("completed")
             .exclude_pull_requests(true)
             .page(page)
-            // .per_page(10)
             .send()
-            .await?;
-        if result.items.is_empty() {
-            break;
-        }
-        for run in result.items {
-            if let Some(existing) = existing.as_ref() {
-                if run.head_sha == existing.commit.sha {
+            .await;
+        let items = match result {
+            Ok(result) if result.items.is_empty() => break,
+            Ok(result) => result.items,
+            Err(octocrab::Error::GitHub {
+                source: GitHubError { status_code: StatusCode::NOT_FOUND, .. },
+                ..
+            }) => break,
+            Err(e) => {
+                return Err(e).with_context(|| format!("Failed to fetch workflows page {}", page));
+            }
+        };
+        for run in items {
+            if let Some(commit) = existing.as_ref().and_then(|e| e.commit.as_ref()) {
+                if run.head_sha == commit.sha {
                     break 'outer;
                 }
             }

@@ -208,6 +208,9 @@ pub async fn get_report(
     else {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };
+    let Some(commit) = project_info.commit.as_ref() else {
+        return Err(AppError::Status(StatusCode::NOT_FOUND));
+    };
     let version = if let Some(version) = &params.version {
         if version.eq_ignore_ascii_case("default") {
             project_info.default_version().ok_or(AppError::Status(StatusCode::NOT_FOUND))?
@@ -220,7 +223,7 @@ pub async fn get_report(
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };
     let Some(report) =
-        state.db.get_report(&params.owner, &params.repo, &project_info.commit.sha, version).await?
+        state.db.get_report(&params.owner, &params.repo, &commit.sha, version).await?
     else {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };

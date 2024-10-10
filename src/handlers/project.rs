@@ -60,17 +60,20 @@ pub async fn get_projects(
     let projects = state.db.get_projects().await?;
     let mut out = projects
         .iter()
-        .map(|p| ProjectInfoContext {
-            id: p.project.id,
-            path: format!("/{}/{}", p.project.owner, p.project.repo),
-            owner: p.project.owner.clone(),
-            repo: p.project.repo.clone(),
-            name: p.project.name().into_owned(),
-            short_name: p.project.short_name().to_owned(),
-            commit: p.commit.sha.clone(),
-            timestamp: p.commit.timestamp,
-            measures: Default::default(),
-            platform: p.project.platform.clone(),
+        .filter_map(|p| {
+            let commit = p.commit.as_ref()?;
+            Some(ProjectInfoContext {
+                id: p.project.id,
+                path: format!("/{}/{}", p.project.owner, p.project.repo),
+                owner: p.project.owner.clone(),
+                repo: p.project.repo.clone(),
+                name: p.project.name().into_owned(),
+                short_name: p.project.short_name().to_owned(),
+                commit: commit.sha.clone(),
+                timestamp: commit.timestamp,
+                measures: Default::default(),
+                platform: p.project.platform.clone(),
+            })
         })
         .collect::<Vec<_>>();
 
@@ -85,14 +88,15 @@ pub async fn get_projects(
             let Some(version) = info.default_version() else {
                 return (info, Err(anyhow!("No report version found")));
             };
+            let commit = info.commit.as_ref().unwrap();
             let report = state
                 .db
-                .get_report(&info.project.owner, &info.project.repo, &info.commit.sha, version)
+                .get_report(&info.project.owner, &info.project.repo, &commit.sha, version)
                 .await
                 .with_context(|| {
                     format!(
                         "Failed to fetch report for {}/{} sha {} version {}",
-                        info.project.owner, info.project.repo, info.commit.sha, version
+                        info.project.owner, info.project.repo, commit.sha, version
                     )
                 });
             (info, report)

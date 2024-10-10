@@ -345,49 +345,53 @@ impl Database {
             })
             .collect::<Vec<_>>()
         };
-        let Some(first_report) = reports.first() else {
-            return Ok(None);
-        };
-        // Fetch previous and next commits
-        let timestamp = first_report.timestamp.and_utc();
-        let prev_commit = sqlx::query!(
-            r#"
-            SELECT git_commit
-            FROM reports
-            WHERE project_id = ? AND timestamp < ?
-            ORDER BY timestamp DESC
-            LIMIT 1
-            "#,
-            project_id,
-            timestamp,
-        )
-        .fetch_optional(&mut *conn)
-        .await?
-        .map(|row| row.git_commit);
-        let next_commit = sqlx::query!(
-            r#"
-            SELECT git_commit
-            FROM reports
-            WHERE project_id = ? AND timestamp > ?
-            ORDER BY timestamp
-            LIMIT 1
-            "#,
-            project_id,
-            timestamp,
-        )
-        .fetch_optional(&mut *conn)
-        .await?
-        .map(|row| row.git_commit);
-        Ok(Some(ProjectInfo {
+        let mut info = ProjectInfo {
             project,
-            commit: Commit {
+            commit: None,
+            report_versions: reports.iter().map(|r| r.version.clone()).collect(),
+            prev_commit: None,
+            next_commit: None,
+        };
+        if let Some(first_report) = reports.first() {
+            // Fetch previous and next commits
+            let timestamp = first_report.timestamp.and_utc();
+            let prev_commit = sqlx::query!(
+                r#"
+                SELECT git_commit
+                FROM reports
+                WHERE project_id = ? AND timestamp < ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+                "#,
+                project_id,
+                timestamp,
+            )
+            .fetch_optional(&mut *conn)
+            .await?
+            .map(|row| row.git_commit);
+            let next_commit = sqlx::query!(
+                r#"
+                SELECT git_commit
+                FROM reports
+                WHERE project_id = ? AND timestamp > ?
+                ORDER BY timestamp
+                LIMIT 1
+                "#,
+                project_id,
+                timestamp,
+            )
+            .fetch_optional(&mut *conn)
+            .await?
+            .map(|row| row.git_commit);
+
+            info.commit = Some(Commit {
                 sha: first_report.git_commit.clone(),
                 timestamp: first_report.timestamp.and_utc(),
-            },
-            report_versions: reports.iter().map(|r| r.version.clone()).collect(),
-            prev_commit,
-            next_commit,
-        }))
+            });
+            info.prev_commit = prev_commit;
+            info.next_commit = next_commit;
+        }
+        Ok(Some(info))
     }
 
     pub async fn get_projects(&self) -> Result<Vec<ProjectInfo>> {
@@ -402,14 +406,17 @@ impl Database {
                 short_name,
                 default_version,
                 platform,
-                git_commit AS "git_commit!",
+                git_commit,
                 MAX(timestamp) AS "timestamp: chrono::NaiveDateTime",
-                JSON_GROUP_ARRAY(version ORDER BY version) AS versions
-            FROM projects JOIN reports ON projects.id = reports.project_id
-            WHERE timestamp = (
-                SELECT MAX(timestamp)
-                FROM reports
-                WHERE project_id = projects.id
+                JSON_GROUP_ARRAY(version ORDER BY version)
+                    FILTER (WHERE version IS NOT NULL) AS versions
+            FROM projects LEFT JOIN reports ON (
+                reports.project_id = projects.id
+                AND reports.timestamp = (
+                    SELECT MAX(timestamp)
+                    FROM reports
+                    WHERE project_id = projects.id
+                )
             )
             GROUP BY projects.id
             ORDER BY MAX(timestamp) DESC
@@ -428,8 +435,16 @@ impl Database {
                 default_version: row.default_version,
                 platform: row.platform,
             },
-            commit: Commit { sha: row.git_commit, timestamp: row.timestamp.and_utc() },
-            report_versions: serde_json::from_str(&row.versions).unwrap_or_default(),
+            commit: match (row.git_commit, row.timestamp) {
+                (Some(sha), Some(timestamp)) => {
+                    Some(Commit { sha, timestamp: timestamp.and_utc() })
+                }
+                _ => None,
+            },
+            report_versions: row
+                .versions
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
             prev_commit: None,
             next_commit: None,
         })
