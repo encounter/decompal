@@ -11,6 +11,7 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use decomp_dev_core::{
     AppError,
     config::{Config, GitHubConfig},
+    models::Project,
 };
 use decomp_dev_github::graphql::{
     CurrentUserResponse, RepositoryPermission, fetch_current_user, fetch_simple_current_user,
@@ -86,6 +87,10 @@ impl CurrentUser {
 
     pub fn can_manage_repo(&self, id: u64) -> bool {
         matches!(self.permissions_for_repo(id), RepositoryPermission::Admin)
+    }
+
+    pub fn can_manage_project(&self, project: &Project) -> bool {
+        self.super_admin || (!project.permanently_disabled && self.can_manage_repo(project.id))
     }
 }
 

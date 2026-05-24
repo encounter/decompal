@@ -722,7 +722,7 @@ async fn render_report(
     let project_manage_path =
         format!("/manage/{}/{}", project_info.project.owner, project_info.project.repo);
     let can_manage =
-        current_user.as_ref().is_some_and(|u| u.can_manage_repo(project_info.project.id));
+        current_user.as_ref().is_some_and(|u| u.can_manage_project(&project_info.project));
     let default_category = project_info.project.default_category();
 
     let is_default_version = project_info.default_version() == Some(report.version.as_str());

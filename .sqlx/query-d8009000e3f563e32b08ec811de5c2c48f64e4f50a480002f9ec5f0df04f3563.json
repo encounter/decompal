@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT id AS \"id!\", owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style AS \"pr_report_style!\", header_image_id, enabled\n            FROM projects\n            WHERE id = ?\n            ",
+  "query": "\n            SELECT id AS \"id!\", owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style AS \"pr_report_style!\", header_image_id, enabled, permanently_disabled\n            FROM projects\n            WHERE owner = ? COLLATE NOCASE AND repo = ? COLLATE NOCASE\n            ",
   "describe": {
     "columns": [
       {
@@ -67,26 +67,32 @@
         "name": "enabled",
         "ordinal": 12,
         "type_info": "Bool"
+      },
+      {
+        "name": "permanently_disabled",
+        "ordinal": 13,
+        "type_info": "Bool"
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 2
     },
     "nullable": [
-      false,
-      false,
-      false,
-      true,
-      true,
-      true,
-      true,
-      true,
       true,
       false,
       false,
       true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "d6b5cfd0b352120901dad884ddae80e6b9e94c78d80511a885a8a336147cc57f"
+  "hash": "d8009000e3f563e32b08ec811de5c2c48f64e4f50a480002f9ec5f0df04f3563"
 }

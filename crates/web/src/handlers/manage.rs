@@ -42,7 +42,7 @@ pub async fn manage(
         .get_projects()
         .await?
         .into_iter()
-        .filter(|p| current_user.can_manage_repo(p.project.id))
+        .filter(|p| current_user.can_manage_project(&p.project))
         .sorted_by(|a, b| lexicmp::natural_lexical_cmp(&a.project.name(), &b.project.name()))
         .collect::<Vec<_>>();
 
@@ -347,7 +347,7 @@ pub async fn manage_project(
     let Some(info) = state.db.get_project_info(&params.owner, &params.repo, None).await? else {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };
-    if !current_user.can_manage_repo(info.project.id) {
+    if !current_user.can_manage_project(&info.project) {
         return Err(AppError::Status(StatusCode::FORBIDDEN));
     }
 
@@ -467,6 +467,15 @@ async fn render_manage_project(
                                 "Enable project"
                                 br;
                                 small.muted { "Disabled projects will not be listed, and reports will not be fetched." }
+                            }
+                            @if current_user.super_admin {
+                                label {
+                                    input name="permanently_disabled" type="checkbox" role="switch"
+                                        checked[project_info.project.permanently_disabled];
+                                    "Permanently disable project"
+                                    br;
+                                    small.muted { "Project owners cannot manage permanently disabled projects." }
+                                }
                             }
                             label {
                                 "Repository"
@@ -592,6 +601,7 @@ pub struct ProjectForm {
     pub header_image: Option<Bytes>,
     pub clear_header_image: Option<String>,
     pub enabled: Option<String>,
+    pub permanently_disabled: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -610,7 +620,7 @@ pub async fn manage_project_save(
     else {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };
-    if !current_user.can_manage_repo(project_info.project.id) {
+    if !current_user.can_manage_project(&project_info.project) {
         return Err(AppError::Status(StatusCode::FORBIDDEN));
     }
     if !ALL_PLATFORMS.iter().any(|p| p.to_str() == form.platform) {
@@ -639,6 +649,11 @@ pub async fn manage_project_save(
     let short_name = form.short_name.trim();
     let platform = form.platform.trim();
     let workflow_id = form.workflow_id.trim();
+    let permanently_disabled = if current_user.super_admin {
+        form.permanently_disabled.is_some_and(|v| v == "on")
+    } else {
+        project_info.project.permanently_disabled
+    };
     let project = Project {
         id: project_info.project.id,
         owner: project_info.project.owner,
@@ -661,7 +676,8 @@ pub async fn manage_project_save(
             project_info.project.pr_report_style
         },
         header_image_id,
-        enabled: form.enabled.is_some_and(|v| v == "on"),
+        enabled: form.enabled.is_some_and(|v| v == "on") && !permanently_disabled,
+        permanently_disabled,
     };
     state.db.update_project(&project).await?;
     let redirect_url = format!("/{}/{}", params.owner, params.repo);
@@ -677,7 +693,7 @@ pub async fn manage_project_refresh(
     let Some(info) = state.db.get_project_info(&params.owner, &params.repo, None).await? else {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };
-    if !current_user.can_manage_repo(info.project.id) {
+    if !current_user.can_manage_project(&info.project) {
         return Err(AppError::Status(StatusCode::FORBIDDEN));
     }
 
@@ -713,7 +729,7 @@ pub async fn delete_commit(
     let Some(info) = state.db.get_project_info(&params.owner, &params.repo, None).await? else {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     };
-    if !current_user.can_manage_repo(info.project.id) {
+    if !current_user.can_manage_project(&info.project) {
         return Err(AppError::Status(StatusCode::FORBIDDEN));
     }
     let num_reports_deleted =

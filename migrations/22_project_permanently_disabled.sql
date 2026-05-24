@@ -1,0 +1,1 @@
+ALTER TABLE projects ADD COLUMN permanently_disabled BOOLEAN NOT NULL DEFAULT FALSE;

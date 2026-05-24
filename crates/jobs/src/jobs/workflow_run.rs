@@ -98,6 +98,15 @@ async fn process_workflow_run_push(ctx: &JobContext, job: &ProcessWorkflowRunJob
         tracing::warn!("No project found for repository ID {}", job.repository_id);
         return Ok(());
     };
+    if !project_info.project.reports_enabled() {
+        tracing::info!(
+            "Skipping disabled project {}/{} for workflow run {}",
+            project_info.project.owner,
+            project_info.project.repo,
+            job.run_id
+        );
+        return Ok(());
+    }
 
     // Fetch repository info
     let client = ctx.github.client_for(job.repository_id.0).await?;
@@ -189,6 +198,15 @@ async fn process_workflow_run_pull_request(
         tracing::warn!("No project found for repository ID {}", job.repository_id);
         return Ok(());
     };
+    if !project_info.project.reports_enabled() {
+        tracing::info!(
+            "Skipping disabled project {}/{} for workflow run {}",
+            project_info.project.owner,
+            project_info.project.repo,
+            job.run_id
+        );
+        return Ok(());
+    }
 
     if !project_info.project.enable_pr_comments {
         return Ok(());

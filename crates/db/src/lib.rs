@@ -88,8 +88,8 @@ impl Database {
         let pr_report_style = project.pr_report_style.as_str();
         sqlx::query!(
             r#"
-            INSERT INTO projects (id, owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style, header_image_id, enabled, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO projects (id, owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style, header_image_id, enabled, permanently_disabled, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT (id) DO NOTHING
             "#,
             project_id,
@@ -105,6 +105,7 @@ impl Database {
             pr_report_style,
             header_image_id,
             project.enabled,
+            project.permanently_disabled,
         )
             .execute(&mut *tx)
             .await?;
@@ -414,7 +415,7 @@ impl Database {
     ) -> Result<Option<Project>> {
         Ok(sqlx::query!(
             r#"
-            SELECT id AS "id!", owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style AS "pr_report_style!", header_image_id, enabled
+            SELECT id AS "id!", owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style AS "pr_report_style!", header_image_id, enabled, permanently_disabled
             FROM projects
             WHERE owner = ? COLLATE NOCASE AND repo = ? COLLATE NOCASE
             "#,
@@ -438,6 +439,7 @@ impl Database {
                 pr_report_style: row.pr_report_style.parse().unwrap_or_default(),
                 header_image_id: row.header_image_id.and_then(|b| b.try_into().ok()),
                 enabled: row.enabled,
+                permanently_disabled: row.permanently_disabled,
             }
         }))
     }
@@ -450,7 +452,7 @@ impl Database {
         let project_id_db = project_id as i64;
         Ok(sqlx::query!(
             r#"
-            SELECT id AS "id!", owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style AS "pr_report_style!", header_image_id, enabled
+            SELECT id AS "id!", owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style AS "pr_report_style!", header_image_id, enabled, permanently_disabled
             FROM projects
             WHERE id = ?
             "#,
@@ -473,6 +475,7 @@ impl Database {
                 pr_report_style: row.pr_report_style.parse().unwrap_or_default(),
                 header_image_id: row.header_image_id.and_then(|b| b.try_into().ok()),
                 enabled: row.enabled,
+                permanently_disabled: row.permanently_disabled,
             }
         }))
     }
@@ -632,6 +635,7 @@ impl Database {
                 pr_report_style AS "pr_report_style!",
                 header_image_id,
                 enabled AS "enabled!",
+                permanently_disabled AS "permanently_disabled!",
                 git_commit,
                 git_commit_message,
                 MAX(timestamp) AS "timestamp: time::OffsetDateTime",
@@ -667,6 +671,7 @@ impl Database {
                 pr_report_style: row.pr_report_style.parse().unwrap_or_default(),
                 header_image_id: row.header_image_id.and_then(|b| b.try_into().ok()),
                 enabled: row.enabled,
+                permanently_disabled: row.permanently_disabled,
             },
             commit: match (row.git_commit, row.timestamp) {
                 (Some(sha), Some(timestamp)) => Some(Commit {
@@ -1025,7 +1030,7 @@ impl Database {
         sqlx::query!(
             r#"
             UPDATE projects
-            SET owner = ?, repo = ?, name = ?, short_name = ?, default_category = ?, default_version = ?, platform = ?, workflow_id = ?, enable_pr_comments = ?, pr_report_style = ?, header_image_id = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+            SET owner = ?, repo = ?, name = ?, short_name = ?, default_category = ?, default_version = ?, platform = ?, workflow_id = ?, enable_pr_comments = ?, pr_report_style = ?, header_image_id = ?, enabled = ?, permanently_disabled = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             "#,
             project.owner,
@@ -1040,6 +1045,7 @@ impl Database {
             pr_report_style,
             header_image_id,
             project.enabled,
+            project.permanently_disabled,
             project_id,
         )
         .execute(&mut *conn)
@@ -1054,8 +1060,8 @@ impl Database {
         let pr_report_style = project.pr_report_style.as_str();
         sqlx::query!(
             r#"
-            INSERT INTO projects (id, owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style, header_image_id, enabled, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO projects (id, owner, repo, name, short_name, default_category, default_version, platform, workflow_id, enable_pr_comments, pr_report_style, header_image_id, enabled, permanently_disabled, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             "#,
             project_id,
             project.owner,
@@ -1070,6 +1076,7 @@ impl Database {
             pr_report_style,
             header_image_id,
             project.enabled,
+            project.permanently_disabled,
         )
         .execute(&mut *conn)
         .await?;

@@ -250,6 +250,14 @@ pub async fn refresh_project(
         .await
         .context("Failed to fetch project info")?
         .with_context(|| format!("Failed to fetch project info for ID {repo_id}"))?;
+    if !project_info.project.reports_enabled() {
+        tracing::info!(
+            "Skipping disabled project {}/{}",
+            project_info.project.owner,
+            project_info.project.repo
+        );
+        return Ok(0);
+    }
     let client = match client_override {
         Some(client) => client.clone(),
         None => github.client_for(repo_id).await?,

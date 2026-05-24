@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE projects\n            SET owner = ?, repo = ?, name = ?, short_name = ?, default_category = ?, default_version = ?, platform = ?, workflow_id = ?, enable_pr_comments = ?, pr_report_style = ?, header_image_id = ?, enabled = ?, permanently_disabled = ?, updated_at = CURRENT_TIMESTAMP\n            WHERE id = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 14
+    },
+    "nullable": []
+  },
+  "hash": "f664efe4589ab51c477c2104a878bc85eb5856032f6890048d51e1eeb6cd25a2"
+}

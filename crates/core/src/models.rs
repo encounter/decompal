@@ -62,6 +62,7 @@ pub struct Project {
     pub pr_report_style: PullReportStyle,
     pub header_image_id: Option<ImageId>,
     pub enabled: bool,
+    pub permanently_disabled: bool,
 }
 
 impl Default for Project {
@@ -80,6 +81,7 @@ impl Default for Project {
             pr_report_style: PullReportStyle::Comment,
             header_image_id: None,
             enabled: true,
+            permanently_disabled: false,
         }
     }
 }
@@ -100,6 +102,8 @@ impl Project {
     pub fn repo_url(&self) -> String { format!("https://github.com/{}/{}", self.owner, self.repo) }
 
     pub fn default_category(&self) -> &str { self.default_category.as_deref().unwrap_or("all") }
+
+    pub fn reports_enabled(&self) -> bool { self.enabled && !self.permanently_disabled }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
@@ -301,7 +305,7 @@ pub enum ProjectVisibility {
 
 pub fn project_visibility(project: &Project, measures: Option<&Measures>) -> ProjectVisibility {
     // Hide projects with less than 0.5% matched code or if the project is disabled
-    if !project.enabled {
+    if !project.reports_enabled() {
         ProjectVisibility::Disabled
     } else if measures.is_none_or(|m| m.matched_code_percent < 0.5) {
         ProjectVisibility::Hidden
