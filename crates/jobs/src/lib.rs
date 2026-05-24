@@ -86,8 +86,13 @@ pub fn create_monitor(
     context: JobContext,
     config: &WorkerConfig,
 ) -> Monitor {
-    let &WorkerConfig { workflow_run_concurrency, refresh_project_concurrency, retry_attempts } =
-        config;
+    let &WorkerConfig {
+        workflow_run_concurrency,
+        refresh_project_concurrency,
+        retry_attempts,
+        job_timeout_secs,
+    } = config;
+    let job_timeout = Duration::from_secs(job_timeout_secs);
 
     let backoff = ExponentialBackoffMaker::new(
         Duration::from_secs(1),
@@ -112,6 +117,7 @@ pub fn create_monitor(
         .register(move |_| {
             WorkerBuilder::new("workflow-run-worker")
                 .backend(storage1.workflow_run.clone())
+                .timeout(job_timeout)
                 .retry(retry1.clone())
                 .enable_tracing()
                 .catch_panic()
@@ -128,6 +134,7 @@ pub fn create_monitor(
         .register(move |_| {
             WorkerBuilder::new("refresh-project-worker")
                 .backend(storage2.refresh_project.clone())
+                .timeout(job_timeout)
                 .retry(retry2.clone())
                 .enable_tracing()
                 .catch_panic()

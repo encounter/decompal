@@ -61,10 +61,20 @@ pub struct WorkerConfig {
     pub refresh_project_concurrency: usize,
     /// Number of retry attempts for failed jobs.
     pub retry_attempts: usize,
+    /// Maximum wall-clock seconds allowed for a single job attempt.
+    #[serde(default = "default_job_timeout_secs")]
+    pub job_timeout_secs: u64,
 }
 
 impl Default for WorkerConfig {
     fn default() -> Self {
-        Self { workflow_run_concurrency: 3, refresh_project_concurrency: 3, retry_attempts: 5 }
+        Self {
+            workflow_run_concurrency: 3,
+            refresh_project_concurrency: 3,
+            retry_attempts: 5,
+            job_timeout_secs: default_job_timeout_secs(),
+        }
     }
 }
+
+fn default_job_timeout_secs() -> u64 { 15 * 60 }
