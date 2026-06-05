@@ -287,6 +287,7 @@ async fn process_workflow_run_pull_request(
                 &artifact.version,
                 Some(&base_commit),
                 Some(&job.head_commit),
+                true,
             ));
         }
     }
@@ -298,6 +299,7 @@ async fn process_workflow_run_pull_request(
                 base_version,
                 Some(&base_commit),
                 Some(&job.head_commit),
+                false,
             ));
         }
     }
