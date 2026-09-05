@@ -14,7 +14,7 @@ use decomp_dev_core::{
     util::{UrlExt, format_percent, size},
 };
 use decomp_dev_images::{
-    badge,
+    badge, image_mime_from_ext,
     treemap::{layout_units, unit_color},
 };
 use image::ImageFormat;
@@ -231,8 +231,8 @@ impl From<&Measures> for TemplateMeasures {
 }
 
 fn is_valid_extension(ext: &str) -> bool {
-    // FIXME: hack for versions that have .nn where nn is a number
-    ext.chars().any(|c| c.is_ascii_alphabetic())
+    matches!(ext.to_ascii_lowercase().as_str(), "json" | "binpb" | "proto" | "svg")
+        || image_mime_from_ext(ext).is_some()
 }
 
 fn extract_extension(params: ReportParams) -> (ReportParams, Option<String>) {
