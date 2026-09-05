@@ -305,12 +305,19 @@ pub fn generate_missing_report_comment(
     version: &str,
     from_commit: Option<&Commit>,
     to_commit: Option<&Commit>,
+    base_missing: bool,
 ) -> String {
+    let error_msg = if base_missing {
+        "Base report not found. Either the build or webhook failed on the base branch or this version was just added in this PR."
+    } else {
+        "PR report not found. The build or webhook failed on this PR."
+    };
     format!(
-        "### Report for {} ({} - {})\n\n[!] Report not found. Did the build succeed?\n\n",
+        "### Report for {} ({} - {})\n\n[!] {}\n\n",
         version,
         from_commit.map_or("<none>", |c| &c.sha[..7]),
-        to_commit.map_or("<none>", |c| &c.sha[..7])
+        to_commit.map_or("<none>", |c| &c.sha[..7]),
+        error_msg
     )
 }
 
@@ -548,10 +555,16 @@ mod tests {
             message: Some("Test commit".to_string()),
             timestamp: UtcDateTime::UNIX_EPOCH,
         };
-        let comment = generate_missing_report_comment("GALE01", Some(&commit), Some(&commit));
+        let comment =
+            generate_missing_report_comment("GALE01", Some(&commit), Some(&commit), false);
         assert_eq!(
             comment,
-            "### Report for GALE01 (abc1234 - abc1234)\n\n[!] Report not found. Did the build succeed?\n\n"
+            "### Report for GALE01 (abc1234 - abc1234)\n\n[!] PR report not found. The build or webhook failed on this PR.\n\n"
+        );
+        let comment = generate_missing_report_comment("GALE01", Some(&commit), Some(&commit), true);
+        assert_eq!(
+            comment,
+            "### Report for GALE01 (abc1234 - abc1234)\n\n[!] Base report not found. Either the build or webhook failed on the base branch or this version was just added in this PR.\n\n"
         );
     }
 
@@ -562,8 +575,12 @@ mod tests {
             message: Some("Long commit SHA".to_string()),
             timestamp: UtcDateTime::UNIX_EPOCH,
         };
-        let comment =
-            generate_missing_report_comment("GALE01", Some(&long_commit), Some(&long_commit));
+        let comment = generate_missing_report_comment(
+            "GALE01",
+            Some(&long_commit),
+            Some(&long_commit),
+            false,
+        );
         // Should truncate SHA to 7 characters
         assert!(comment.contains("(abcdef1 - abcdef1)"));
         assert!(!comment.contains("abcdef1234567890"));
