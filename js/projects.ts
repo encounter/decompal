@@ -16,16 +16,19 @@ function updateProjectVisibility() {
       cb.checked = true;
     }
   }
+
   const url = new URL(window.location.href);
   if (allSelected) {
-    if (url.searchParams.has('platform')) {
-      url.searchParams.delete('platform');
-      window.location.replace(url);
-    }
+    url.searchParams.delete('platform');
   } else {
     url.searchParams.set('platform', selectedPlatforms.join(','));
-    window.location.replace(url.toString().replace(/%2C/g, ','));
   }
+  history.replaceState(null, '', url.toString().replace(/%2C/g, ','));
+
+  document.querySelectorAll<HTMLElement>('article.project[data-platform]').forEach((el) => {
+    const p = el.dataset.platform ?? '';
+    el.style.display = allSelected || selectedPlatforms.includes(p) ? '' : 'none';
+  });
 }
 
 document.querySelectorAll('.platform-item').forEach((item) => {
