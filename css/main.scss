@@ -104,18 +104,9 @@ $breakpoints: (
   --pico-code-kbd-color: #000;
   --pico-code-kbd-background-color: #fff;
   --progress-background-color: #{rgba($slate-100, 0.75)};
-  // Light stripes (rather than dark) so the striped "match" segment doesn't
-  // read darker than the solid "linked" segment on the lighter light-mode fills.
   --progress-stripe-color: rgba(255, 255, 255, 0.35);
-  // The fuzzy segment is striped over the grey track, where light stripes would
-  // barely show, so give it dark (but soft) stripes instead.
   --progress-fuzzy-stripe-color: rgba(0, 0, 0, 0.1);
   --text-shadow: none;
-
-  // Progress bar fills. Lighter than dark mode so the green/blue don't look
-  // muddy against a light background. The striped "match" segment keeps the
-  // same base color as the solid "linked" segment, so the bar is one consistent
-  // color and only the light stripes distinguish the matched/fuzzy portion.
   --progress-code-color-1: #{$jade-300};
   --progress-code-color-2: #{$jade-300};
   --progress-data-color-1: #{$azure-300};
@@ -134,8 +125,6 @@ $breakpoints: (
   --text-shadow: 0px 1px 2px var(--text-shadow-color, oklab(0% 0 0/.2)),
     0px 3px 2px var(--text-shadow-color, oklab(0% 0 0/.2)),
     0px 4px 8px var(--text-shadow-color, oklab(0% 0 0/.2));
-
-  // Progress bar fills.
   --progress-code-color-1: #{$jade-400};
   --progress-code-color-2: #{$jade-500};
   --progress-data-color-1: #{$azure-400};
@@ -281,8 +270,6 @@ $progress-height: 2rem;
     background-repeat: repeat;
   }
 
-  // The fuzzy segment is striped over the grey track, so it uses its own stripe
-  // color (dark in light mode) rather than the color-fill stripe color.
   .progress-section.fuzzy {
     --progress-stripe-color: var(--progress-fuzzy-stripe-color);
   }
