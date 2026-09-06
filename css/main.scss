@@ -104,8 +104,13 @@ $breakpoints: (
   --pico-code-kbd-color: #000;
   --pico-code-kbd-background-color: #fff;
   --progress-background-color: #{rgba($slate-100, 0.75)};
-  --progress-stripe-color: rgba(0, 0, 0, 0.15);
+  --progress-stripe-color: rgba(255, 255, 255, 0.35);
+  --progress-fuzzy-stripe-color: rgba(0, 0, 0, 0.1);
   --text-shadow: none;
+  --progress-code-color-1: #{$jade-300};
+  --progress-code-color-2: #{$jade-300};
+  --progress-data-color-1: #{$azure-300};
+  --progress-data-color-2: #{$azure-300};
 }
 
 @mixin pico-theme-dark {
@@ -116,9 +121,14 @@ $breakpoints: (
   --pico-code-kbd-background-color: #333;
   --progress-background-color: #{rgba($slate-800, 0.75)};
   --progress-stripe-color: rgba(255, 255, 255, 0.15);
+  --progress-fuzzy-stripe-color: rgba(255, 255, 255, 0.15);
   --text-shadow: 0px 1px 2px var(--text-shadow-color, oklab(0% 0 0/.2)),
     0px 3px 2px var(--text-shadow-color, oklab(0% 0 0/.2)),
     0px 4px 8px var(--text-shadow-color, oklab(0% 0 0/.2));
+  --progress-code-color-1: #{$jade-400};
+  --progress-code-color-2: #{$jade-500};
+  --progress-data-color-1: #{$azure-400};
+  --progress-data-color-2: #{$azure-500};
 }
 
 [data-theme=dark] {
@@ -260,13 +270,17 @@ $progress-height: 2rem;
     background-repeat: repeat;
   }
 
+  .progress-section.fuzzy {
+    --progress-stripe-color: var(--progress-fuzzy-stripe-color);
+  }
+
   &.code {
     .progress-section:nth-of-type(1) {
-      background-color: $jade-400;
+      background-color: var(--progress-code-color-1);
     }
 
     .progress-section:nth-of-type(2) {
-      background-color: $jade-500;
+      background-color: var(--progress-code-color-2);
     }
 
     .progress-section:nth-of-type(3),
@@ -277,11 +291,11 @@ $progress-height: 2rem;
 
   &.data {
     .progress-section:nth-of-type(1) {
-      background-color: $azure-400;
+      background-color: var(--progress-data-color-1);
     }
 
     .progress-section:nth-of-type(2) {
-      background-color: $azure-500;
+      background-color: var(--progress-data-color-2);
     }
   }
 }
