@@ -10,3 +10,30 @@ document.querySelectorAll('form[data-loading]').forEach((form) => {
     submitButton.innerText = loadingText || 'Loading...';
   });
 });
+
+const versionSelect = document.querySelector<HTMLSelectElement>(
+  'select[name="default_version"]',
+);
+const categorySelect = document.querySelector<HTMLSelectElement>(
+  'select[name="default_category"]',
+);
+if (versionSelect && categorySelect) {
+  versionSelect.addEventListener('change', () => {
+    const template = Array.from(
+      document.querySelectorAll<HTMLTemplateElement>(
+        'template[data-category-version]',
+      ),
+    ).find(
+      (template) => template.dataset.categoryVersion === versionSelect.value,
+    );
+    const previous = categorySelect.value;
+    categorySelect.replaceChildren(
+      template?.content.cloneNode(true) ?? new Option('All', ''),
+    );
+    categorySelect.value = Array.from(categorySelect.options).some(
+      (option) => option.value === previous,
+    )
+      ? previous
+      : '';
+  });
+}
