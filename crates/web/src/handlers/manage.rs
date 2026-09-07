@@ -24,6 +24,7 @@ use decomp_dev_github::{
 use decomp_dev_jobs::RefreshProjectJob;
 use itertools::Itertools;
 use maud::{DOCTYPE, Markup, html};
+use objdiff_core::bindings::report::ReportCategory;
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 
@@ -399,6 +400,17 @@ async fn render_manage_project(
         format!("/manage/{}/{}/refresh", project_info.project.owner, project_info.project.repo);
     let default_version = project_info.default_version();
 
+    let mut version_categories = Vec::new();
+    if let Some(commit) = &project_info.commit {
+        for version in &project_info.report_versions {
+            let report = state.db.get_report(project_info.project.id, &commit.sha, version).await?;
+            version_categories
+                .push((version, report.map(|r| r.report.categories.clone()).unwrap_or_default()));
+        }
+    }
+    let categories = latest_report.map(|r| r.report.categories.as_slice()).unwrap_or_default();
+    let current_category = project_info.project.default_category.as_deref();
+
     let current_name = project_info.project.name.as_deref().unwrap_or("");
     let current_short_name = project_info.project.short_name.as_deref().unwrap_or("");
     let current_platform = project_info.project.platform.as_deref();
@@ -507,6 +519,18 @@ async fn render_manage_project(
                                 }
                             }
                             label {
+                                "Default category"
+                                select name="default_category" {
+                                    (category_options(categories, current_category))
+                                }
+                                small { "Used when viewing the project without a category filter. Falls back to All if unavailable in the selected version." }
+                            }
+                            @for (version, categories) in &version_categories {
+                                template data-category-version=(version) {
+                                    (category_options(categories, None))
+                                }
+                            }
+                            label {
                                 "GitHub workflow ID"
                                 input name="workflow_id" type="text" value=(current_workflow_id);
                                 small { "The GitHub Actions workflow that contains report artifacts." }
@@ -589,12 +613,41 @@ async fn render_manage_project(
     Ok((ctx, rendered).into_response())
 }
 
+fn category_options(categories: &[ReportCategory], current: Option<&str>) -> Markup {
+    let current = current.filter(|id| categories.iter().any(|c| c.id == *id));
+    html! {
+        option value="" selected[current.is_none()] { "All" }
+        @for category in categories {
+            option value=(&category.id) selected[current == Some(category.id.as_str())] {
+                (&category.name)
+            }
+        }
+    }
+}
+
+fn validate_category(
+    submitted: Option<&str>,
+    previous: Option<&str>,
+    categories: &[ReportCategory],
+) -> Result<Option<String>, AppError> {
+    // Older forms may omit the field; an explicit empty value selects All.
+    match submitted.or(previous).filter(|id| !id.is_empty()) {
+        None => Ok(None),
+        Some(id) if categories.iter().any(|c| c.id == id) => Ok(Some(id.to_owned())),
+        // A report may have changed since the settings page was loaded, or the
+        // owner may have switched to a version without the saved category.
+        Some(id) if Some(id) == previous => Ok(None),
+        Some(_) => Err(AppError::Status(StatusCode::BAD_REQUEST)),
+    }
+}
+
 #[derive(Debug, TryFromMultipart)]
 pub struct ProjectForm {
     pub name: String,
     pub short_name: String,
     pub platform: String,
     pub default_version: Option<String>,
+    pub default_category: Option<String>,
     pub workflow_id: String,
     pub enable_pr_comments: Option<String>,
     pub pr_report_style: Option<String>,
@@ -626,6 +679,25 @@ pub async fn manage_project_save(
     if !ALL_PLATFORMS.iter().any(|p| p.to_str() == form.platform) {
         return Err(AppError::Status(StatusCode::BAD_REQUEST));
     };
+
+    let default_version = form.default_version.as_deref().filter(|v| !v.is_empty());
+    if default_version.is_some_and(|v| !project_info.report_versions.iter().any(|r| r == v)) {
+        return Err(AppError::Status(StatusCode::BAD_REQUEST));
+    }
+    let report = if let (Some(version), Some(commit)) = (
+        default_version.or_else(|| project_info.report_versions.first().map(String::as_str)),
+        &project_info.commit,
+    ) {
+        state.db.get_report(project_info.project.id, &commit.sha, version).await?
+    } else {
+        None
+    };
+    let categories = report.as_ref().map(|r| r.report.categories.as_slice()).unwrap_or_default();
+    let default_category = validate_category(
+        form.default_category.as_deref(),
+        project_info.project.default_category.as_deref(),
+        categories,
+    )?;
 
     let mut header_image_id = project_info.project.header_image_id;
     if let Some(header_image) = form.header_image.filter(|b| !b.is_empty()) {
@@ -660,8 +732,8 @@ pub async fn manage_project_save(
         repo: project_info.project.repo,
         name: (!name.is_empty()).then_some(name.to_string()),
         short_name: (!short_name.is_empty()).then_some(short_name.to_string()),
-        default_category: project_info.project.default_category,
-        default_version: form.default_version,
+        default_category,
+        default_version: default_version.map(str::to_owned),
         platform: (!platform.is_empty()).then_some(platform.to_string()),
         workflow_id: (!workflow_id.is_empty()).then_some(workflow_id.to_string()),
         // If there's no installation ID, use the existing value
@@ -743,3 +815,6 @@ pub async fn delete_commit(
     let redirect_url = format!("/manage/{}/{}", params.owner, params.repo);
     Ok(Redirect::to(&redirect_url).into_response())
 }
+
+#[cfg(test)]
+mod tests;
